@@ -80,7 +80,7 @@ class WikiJsApi:
     ##############################################
 
     def query_wikijs(self, query: dict) -> dict:
-        print(f"API {query}")
+        # print(f"API {query}")
         response = requests.post(self._api_url, json=query, headers=self._headers)
         if response.status_code != requests.codes.ok:
             raise NameError(f"Error {response}")
@@ -94,7 +94,16 @@ class WikiJsApi:
     ##############################################
 
     def page(self, path: str, locale: str='fr') -> Page:
-        query = {'query': '{pages {singleByPath(path: "%s", locale: "%s") {id path title locale}}}' % (path, locale)}
+        query = {
+            'variables': {
+                'path': path,
+                'locale': locale,
+            },
+            'query': """
+query ($path: String!, $locale: String!)
+  {pages {singleByPath(path: $path, locale: $locale) {id path title locale}}}
+""",
+        }
         data = self.query_wikijs(query)
         _ = xpath(data, 'data/pages/singleByPath')
         return Page(api=self, **_)
@@ -103,7 +112,8 @@ class WikiJsApi:
 
     def yield_pages(self) -> Iterator[Page]:
         # Query > PageQuery > PageListItem
-        query = {'query': '{pages {list(orderBy: TITLE) {id path title locale}}}'}
+        # TITLE
+        query = {'query': '{pages {list(orderBy: PATH) {id path title locale}}}'}
         data = self.query_wikijs(query)
         # {'data': {'pages': {'list': [{'id': 51,
         #                               'path': 'Vera/a-apporter',
@@ -114,7 +124,12 @@ class WikiJsApi:
     ##############################################
 
     def complete_page(self, page: Page) -> None:
-        query = {'query': '{pages {single(id: %s) {content}}}' % (page.id)}
+        query = {
+            'variables': {
+                'id': page.id,
+            },
+            'query': 'query ($id: Int!) {pages {single(id: $id) {content}}}',
+        }
         data = self.query_wikijs(query)
         # pprint(data)
         # {'data': {'pages': {'single': {'content':
@@ -124,13 +139,11 @@ class WikiJsApi:
 
     def move_page(self, page: Page, path: str, locale: str='fr') -> None:
         query = {
-            # 'operationName': None,
             'variables': {
                 'id': page.id,
-                'destinationLocale': locale,
                 'destinationPath': path,
+                'destinationLocale': locale,
             },
-            # 'extensions': {},
             # __typename
             'query': """
 mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
