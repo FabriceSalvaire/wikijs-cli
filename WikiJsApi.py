@@ -8,6 +8,13 @@ import requests
 
 ####################################################################################################
 
+# GraphQL
+#  !
+#    By default, all value types in GraphQL can result in a null value.
+#    If a value type includes an exclamation point, it means that value cannot be null.
+
+####################################################################################################
+
 @dataclass
 class Page:
     api: 'WikiJsApi'
@@ -137,13 +144,66 @@ query ($path: String!, $locale: String!)
     def yield_pages(self) -> Iterator[Page]:
         # Query > PageQuery > PageListItem
         # TITLE
-        query = {'query': '{pages {list(orderBy: PATH) {id path title locale}}}'}
+        query = {'query': '''
+{pages {
+  list(orderBy: PATH) {
+    id
+    path
+    title
+    locale
+    description
+    contentType
+    isPublished
+    isPrivate
+    privateNS
+    createdAt
+    updatedAt
+    tags
+}}}''',
+        }
         data = self.query_wikijs(query)
         # {'data': {'pages': {'list': [{'id': 51,
         #                               'path': 'Vera/a-apporter',
         #                               'title': 'À apporter'},
         for _ in xpath(data, 'data/pages/list'):
             yield Page(api=self, **_)
+
+    ##############################################
+
+    def yield_tree(self, path: str) -> Iterator[Page]:
+        # Query > PageQuery > PageTreeItem
+        # TITLE
+        query = {
+            'variables': {
+                'path': path,
+                # 'parent': 3,
+                'locale': 'fr'
+            },
+# query ($parent: Int, $locale: String!)
+# {pages {
+#   tree(parent: $parent, mode: ALL, locale: $locale) {
+# PAGES
+            'query': '''
+query ($path: String!, $locale: String!)
+{pages {
+  tree(path: $path, mode: ALL, locale: $locale, includeAncestors: false) {
+    id
+    path
+    depth
+    title
+    isPrivate
+    isFolder
+    privateNS
+    parent
+    pageId
+    locale
+}}}
+''',
+        }
+        data = self.query_wikijs(query)
+        pprint(data)
+        # for _ in xpath(data, 'data/pages/list'):
+        #     yield Page(api=self, **_)
 
     ##############################################
 

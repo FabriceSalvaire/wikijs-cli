@@ -172,6 +172,18 @@ class Cli:
 
     ##############################################
 
+    def tree(self, path: str) -> None:
+        for page in self._api.yield_tree(path):
+            pass
+            # page.complete()
+            # _ = f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> {len(page.content):5} @{page.locale} {page.id:3}"
+            # print_formatted_text(
+            #     HTML(_),
+            #     style=self.STYLE,
+            # )
+
+    ##############################################
+
     def dump(self, path: str, output: str = None) -> None:
         page = self._api.page(path)
         page.complete()
@@ -214,7 +226,7 @@ class Cli:
     ##############################################
 
     def move(self, old_path: str, new_path: str, dryrun: bool = False) -> None:
-        _ = f"  <green>{old_path}</green> <red>-></red> <blue>{new_path}</blue>"
+        _ = f"  Move: <green>{old_path}</green> <red>-></red> <blue>{new_path}</blue>"
         print_formatted_text(
             HTML(_),
             style=self.STYLE,
@@ -225,11 +237,10 @@ class Cli:
             # print(page.path)
             if page.path.startswith(old_path):
                 dest = page.path.replace(old_path, new_path)
-                _ = f"  <green>{page.path}</green> <red>-></red> <blue>{dest}</blue>"
+                _ = f"  Move page: <green>{page.path}</green> <red>-></red> <blue>{dest}</blue>"
                 print_formatted_text(
                     HTML(_),
                     style=self.STYLE,
                 )
                 if not dryrun:
-                    pass
-                    # page.move(dest)
+                    page.move(dest)
