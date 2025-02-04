@@ -8,6 +8,8 @@ __all__ = ['Cli']
 import os
 import traceback
 
+from pathlib import Path
+
 # See also [cmd — Support for line-oriented command interpreters — Python documentation](https://docs.python.org/3/library/cmd.html)
 # Python Prompt Toolkit](https://python-prompt-toolkit.readthedocs.io/en/master/)
 from prompt_toolkit import PromptSession, HTML
@@ -53,6 +55,7 @@ class Cli:
         'move',
         'quit',
         'update',
+        'usage',
     ])
 
     ##############################################
@@ -142,7 +145,12 @@ class Cli:
     def usage(self) -> None:
         for _ in (
             "<red>enter</red>: <blue>command argument</blue>",
+            "or <blue>command1 argument; command2 argument; ...</blue>",
             "<red>commands are</red>: " + ', '.join([f"<blue>{_}</blue>" for _ in self.COMMANDS]),
+            "dump <page_url> [output]: dump the page"
+            "list: list all the pages",
+            "move <page_url> <new_page_url>: move a page"
+            "update <page_url> input: update the page"
             "exit using command <blue>quit</blue> or <blue>Ctrl+d</blue>"
         ):
             print_formatted_text(
@@ -195,6 +203,9 @@ class Cli:
             style=self.STYLE,
         )
         if output:
+            output = Path(output)
+            if not output.parent.exist():
+                raise NameError(f"path doesn't exists {output.parent}")
             with open(output, mode='w', encoding='utf8') as fh:
                 fh.write(page.content)
         else:
