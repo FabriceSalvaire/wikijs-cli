@@ -1,3 +1,5 @@
+#! /usr/bin/env python3
+
 ####################################################################################################
 
 from dataclasses import dataclass
@@ -5,8 +7,8 @@ from dataclasses import dataclass
 from yaml import load
 from yaml import Loader
 
-from WikiJsApi import Page, WikiJsApi
-from Cli import Cli
+from WikiJsTools.WikiJsApi import WikiJsApi
+from WikiJsTools.Cli import Cli
 
 ####################################################################################################
 

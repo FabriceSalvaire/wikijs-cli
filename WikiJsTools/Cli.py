@@ -18,7 +18,7 @@ from prompt_toolkit.completion import WordCompleter
 # from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.styles import Style
 
-from WikiJsApi import Page, WikiJsApi
+from .WikiJsApi import Page, WikiJsApi
 
 ####################################################################################################
 
@@ -65,7 +65,7 @@ class Cli:
         self.COMMANDS = [
             _
             for _ in dir(self)
-            if not (_.startswith('_') or _[0].isupper() or _ in ('cli',))
+            if not (_.startswith('_') or _[0].isupper() or _ in ('cli', 'run'))
         ]
 
     ##############################################
@@ -144,14 +144,14 @@ class Cli:
 
     def usage(self) -> None:
         for _ in (
-            "<red>enter</red>: <blue>command argument</blue>",
-            "or <blue>command1 argument; command2 argument; ...</blue>",
-            "<red>commands are</red>: " + ', '.join([f"<blue>{_}</blue>" for _ in self.COMMANDS]),
-            "dump <page_url> [output]: dump the page"
-            "list: list all the pages",
-            "move <page_url> <new_page_url>: move a page"
-            "update <page_url> input: update the page"
-            "exit using command <blue>quit</blue> or <blue>Ctrl+d</blue>"
+            "<red>Enter</red>: <blue>command argument</blue>",
+            "    or <blue>command1 argument; command2 argument; ...</blue>",
+            "<red>Commands are</red>: " + ', '.join([f"<blue>{_}</blue>" for _ in self.COMMANDS]),
+            "  <blue>dump</blue> <green>@page_url@ [output]</green>: dump the page",
+            "  <blue>list</blue>: list all the pages",
+            "  <blue>move</blue> <green>@page_url@ @new_page_url@</green>: move a page",
+            "  <blue>update</blue> <green>@page_url@ input</green>: update the page",
+            "<red>Exit</red> using command <blue>quit</blue> or <blue>Ctrl+d</blue>"
         ):
             print_formatted_text(
                 HTML(_),
@@ -204,7 +204,7 @@ class Cli:
         )
         if output:
             output = Path(output)
-            if not output.parent.exist():
+            if not output.parent.exists():
                 raise NameError(f"path doesn't exists {output.parent}")
             with open(output, mode='w', encoding='utf8') as fh:
                 fh.write(page.content)
