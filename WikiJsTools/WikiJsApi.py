@@ -1,8 +1,11 @@
 ####################################################################################################
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Iterator
+from pathlib import Path
 from pprint import pprint
+import os
 
 import requests
 
@@ -15,9 +18,78 @@ import requests
 
 ####################################################################################################
 
+class BasePage:
+
+    ##############################################
+
+    def file_path(self, dst: Path, path: str = None) -> Path:
+        if path is None:
+            path = self.path
+        match self.contentType:
+            case 'markdown':
+                extension = '.md'
+            case _:
+                extension = '.txt'
+        _ = path.split('/')
+        _[-1] += extension
+        return dst.joinpath(self.locale, *_)
+
+    ##############################################
+
+    def write(self, dst: Path, check_exists: bool = True) -> Path:
+        file_path = self.file_path(dst)
+
+        if check_exists:
+            # Check updatedAt
+            file_date = None
+            if file_path.exists():
+                with open(file_path, 'r') as fh:
+                    for line in fh:
+                        if line.startswith('updatedAt'):
+                            i = line.find(':')
+                            _ = line[i+1:].strip()
+                            file_date = datetime.fromisoformat(_)
+                            break
+            if file_date is not None:
+                # print(f'{self.path} | {old_date} vs {new_date}')
+                if file_date == self.updated_at:
+                    return
+
+        data = ''
+        rule = '-'*50
+        # data += rule + os.linesep
+        for field in (
+                'title',
+                'locale',
+                'path',
+                'description',
+                'tags',
+                'createdAt',
+                'updatedAt',
+
+                'id',
+                'versionId'
+                'isPublished',
+                'isPrivate',
+                'privateNS',
+                'contentType',
+        ):
+            _ = getattr(self, field)
+            data += f'{field}: {_}' + os.linesep
+        data += rule + os.linesep
+        data += self.content
+        # print(f'{file_path}')
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(file_path, 'w') as fh:
+            fh.write(data)
+        return file_path
+
+####################################################################################################
+
 @dataclass
-class Page:
+class Page(BasePage):
     api: 'WikiJsApi'
+
     id: int
     path: str
     locale: str
@@ -51,13 +123,125 @@ class Page:
     ##############################################
 
     def complete(self) -> None:
+        # if 'content' not in self.__dict__:
         self.api.complete_page(self)
+
+    @property
+    def history(self) -> list['PageHistory']:
+        # order is newer first
+        if '_history' not in self.__dict__:
+            self._history = self.api.page_history(self)
+            # self._history_map = {_.versionId: _ for _ in self._history}
+        return self._history
+
+    ##############################################
+
+    @property
+    def updated_at(self) -> datetime:
+        return datetime.fromisoformat(self.updatedAt)
+
+    @property
+    def version_id(self) -> int:
+        return self.history[-1].versionId
+
+    ##############################################
 
     def update(self, *args, **kwargs) -> None:
         self.api.update_page(self, *args, **kwargs)
 
     def move(self, *args, **kwargs) -> None:
         self.api.move_page(self, *args, **kwargs)
+
+####################################################################################################
+
+@dataclass
+class PageVersion(BasePage):
+    api: 'WikiJsApi'
+    page: Page
+
+    # Page
+    pageId: int
+    path: str
+    locale: str
+    title: str
+    description: str
+    contentType: str
+    isPublished: bool
+    isPrivate: bool
+    createdAt: str
+    tags: list[str]
+    content: str
+    publishEndDate: str
+    publishStartDate: str
+    editor: str
+
+    # Version
+    versionId: int
+    versionDate: str
+    action: str
+    authorId: str
+    authorName: str
+
+    ##############################################
+
+    @property
+    def prev(self) -> 'PageVersion':
+        print(f"prev for {self.versionId}")
+        for i, _ in enumerate(self.page.history):
+            # print(f"{i} {_}")
+            if _.versionId == self.versionId:
+                break
+        try:
+            _ = self.page.history[i+1]
+            # print(f"{i+1} {_}")
+            # print(f"{_.versionId} -> {self.versionId}")
+            return _.page_version
+        except IndexError:
+            return None
+
+    # @property
+    # def old_path(self) -> str:
+    #     return self.prev.path
+
+####################################################################################################
+
+@dataclass
+class PageHistory:
+    api: 'WikiJsApi'
+    page: Page
+
+    versionId: int
+    versionDate: str
+    authorId: int
+    authorName: str
+    actionType: str
+
+    valueBefore: str
+    valueAfter: str
+
+    ##############################################
+
+    @property
+    def page_version(self) -> None:
+        if '_page_version' not in self.__dict__:
+            self._page_version = self.api.page_version(self)
+        return self._page_version
+
+    @property
+    def date(self) -> datetime:
+        return datetime.fromisoformat(self.versionDate)
+
+    @property
+    def changed(self) -> bool:
+        return self.valueAfter != self.valueBefore
+
+    @property
+    def old_path(self) -> str:
+        return self.valueBefore
+
+    @property
+    def new_path(self) -> str:
+        return self.valueAfter
 
 ####################################################################################################
 
@@ -90,6 +274,7 @@ class WikiJsApi:
             'Authorization': f'Bearer {api_key}',
             # 'content-type': 'application/json',
         }
+        self.info()
 
     ##############################################
 
@@ -107,7 +292,28 @@ class WikiJsApi:
 
     ##############################################
 
-    def page(self, path: str, locale: str='fr') -> Page:
+    def info(self) -> None:
+        query = {
+            'query': """
+{system
+  {info {
+    currentVersion
+    latestVersion
+    groupsTotal
+    pagesTotal
+    usersTotal
+    tagsTotal
+}}}
+""",
+        }
+        data = self.query_wikijs(query)
+        _ = xpath(data, 'data/system/info')
+        # pprint(data)
+        self._number_of_pages = _['pagesTotal']
+
+    ##############################################
+
+    def page(self, path: str, locale: str = 'fr') -> Page:
         query = {
             'variables': {
                 'path': path,
@@ -144,7 +350,8 @@ query ($path: String!, $locale: String!)
     def yield_pages(self) -> Iterator[Page]:
         # Query > PageQuery > PageListItem
         # TITLE
-        query = {'query': '''
+        query = {
+            'query': '''
 {pages {
   list(orderBy: PATH) {
     id
@@ -221,7 +428,72 @@ query ($path: String!, $locale: String!)
 
     ##############################################
 
-    def move_page(self, page: Page, path: str, locale: str='fr') -> None:
+    def page_history(self, page: Page) -> None:
+        query = {
+            'variables': {
+                'id': page.id,
+            },
+            'query': '''
+query ($id: Int!)
+{pages {
+  history(id: $id) {
+    trail {
+    versionId
+    versionDate
+    authorId
+    authorName
+    actionType
+    valueBefore
+    valueAfter
+    }
+    total
+}}}''',
+        }
+        data = self.query_wikijs(query)
+        history = xpath(data, 'data/pages/history/trail')
+        # _ = xpath(data, 'data/pages/history/total')
+        return [PageHistory(api=self, page=page, **_) for _ in history]
+
+    ##############################################
+
+    def page_version(self, page_history: PageHistory) -> None:
+        query = {
+            'variables': {
+                'id': page_history.page.id,
+                'version_id': page_history.versionId,
+            },
+            'query': '''
+query ($id: Int!, $version_id: Int!)
+{pages {
+  version(pageId: $id, versionId: $version_id) {
+  action
+  authorId
+  authorName
+  content
+  contentType
+  createdAt
+  versionDate
+  description
+  editor
+  isPrivate
+  isPublished
+  locale
+  pageId
+  path
+  publishEndDate
+  publishStartDate
+  tags
+  title
+  versionId
+}}}''',
+        }
+        data = self.query_wikijs(query)
+        _ = xpath(data, 'data/pages/version')
+        return PageVersion(api=self, page=page_history.page, **_)
+
+    ##############################################
+
+    def move_page(self, page: Page, path: str, locale: str = 'fr') -> None:
         query = {
             'variables': {
                 'id': page.id,
@@ -305,3 +577,18 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
         # 'updated.',
         # 'slug': 'ok',
         # 'succeeded': True}}}}}
+
+    ##############################################
+
+    def history(self) -> list[PageHistory]:
+        # , progress_callback
+        history = [_ for page in self.yield_pages() for _ in page.history]
+        # history = []
+        # for page in self.yield_pages():
+        #     print(f'{page.path}')
+        #     for _ in page.history:
+        #         history.append(_)
+        history.sort(key=lambda _: _.date)
+        # for _ in history:
+        #     print(f'{_.versionId} {_.date} {_.page.id} {_.page.path} {_.actionType}')
+        return history

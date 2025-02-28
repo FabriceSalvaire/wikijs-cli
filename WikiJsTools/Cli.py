@@ -4,8 +4,10 @@ __all__ = ['Cli']
 
 ####################################################################################################
 
+from pprint import pprint
 # import logging
 import os
+import subprocess
 import traceback
 
 from pathlib import Path
@@ -29,6 +31,8 @@ LINESEP = os.linesep
 ####################################################################################################
 
 class Cli:
+
+    GIT = '/usr/bin/git'
 
     STYLE = Style.from_dict({
         # User input (default text)
@@ -255,3 +259,59 @@ class Cli:
                 )
                 if not dryrun:
                     page.move(dest)
+
+    ##############################################
+
+    def sync(self, path: Path = None) -> None:
+        if path is None:
+            path = Path('.', 'sync')
+        path.mkdir(exist_ok=True)
+
+        # i = 0
+        for page in self._api.yield_pages():
+            page.complete()
+            file_path = page.sync(path)
+            if file_path is not None:
+                print(f"Wrote {file_path}")
+            # i += 1
+            # if i > 3:
+            #    break
+
+    ##############################################
+
+    def git_sync(self, path: Path = None) -> None:
+        if path is None:
+            path = Path('.', 'git_sync')
+
+        os.chdir(path)
+        if not path.exists():
+            path.mkdir()
+            subprocess.check_call((self.GIT, 'init'))
+
+        # Fixme: progress callback
+        #  how to get number of versions ?
+        history = self._api.history()
+        for page_history in history:
+            version = page_history.page_version
+            match version.action:
+                # case 'init' | 'edit':
+                case 'updated' | 'restored':
+                    print(f'{version.action} {version.path}')
+                    file_path = version.write(path, check_exists=False)
+                    subprocess.check_call((self.GIT, 'add', file_path))
+                    subprocess.check_call((self.GIT, 'commit', '-m', 'update'))
+                # case 'move':
+                case 'moved':
+                    # prev = version.prev
+                    # if prev is not None:
+                    #     print(f'{version.action} {prev.path} -> {version.path}')
+                    # else:
+                    #     print(f'{version.action} ??? -> {version.path}')
+                    if page_history.changed:
+                        print(f'{version.action} {page_history.old_path} -> {page_history.new_path}')
+                        subprocess.check_call((self.GIT, 'mv', page_history.old_path, page_history.new_path))
+                        subprocess.check_call((self.GIT, 'commit', '-m', 'move'))
+                    else:
+                        print(f'{version.action} unchanged')
+                case _:
+                    raise NotImplementedError(f"Action {version.action}")
