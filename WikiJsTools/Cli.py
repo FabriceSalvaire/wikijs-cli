@@ -280,26 +280,47 @@ class Cli:
     ##############################################
 
     def git_sync(self, path: Path = None) -> None:
-        if path is None:
-            path = Path('.', 'git_sync')
+        # Protection
+        if Path.cwd().joinpath('.git').exists():
+            print(f"Current path is a git repo. Danger ! Exit")
+            return
 
-        os.chdir(path)
-        if not path.exists():
+        if path is None:
+            path = Path('.', 'git_sync').resolve()
+        print(f"Git path {path}")
+
+        created = False
+        if path.exists():
+            print("Git already initialised ! Exit")
+            return
+        else:
             path.mkdir()
+            created = True
+        os.chdir(path)
+        if created:
             subprocess.check_call((self.GIT, 'init'))
+
+        def commit(version, message: str) -> None:
+            subprocess.check_call((
+                self.GIT,
+                'commit',
+                '-m', message,
+                f'--date={version.versionDate}',
+            ))
 
         # Fixme: progress callback
         #  how to get number of versions ?
         history = self._api.history()
+        errors = []
         for page_history in history:
             version = page_history.page_version
             match version.action:
                 # case 'init' | 'edit':
                 case 'updated' | 'restored':
                     print(f'{version.action} {version.path}')
-                    file_path = version.write(path, check_exists=False)
+                    file_path = version.write('.', check_exists=False)
                     subprocess.check_call((self.GIT, 'add', file_path))
-                    subprocess.check_call((self.GIT, 'commit', '-m', 'update'))
+                    commit(version, 'update')
                 # case 'move':
                 case 'moved':
                     # prev = version.prev
@@ -308,10 +329,22 @@ class Cli:
                     # else:
                     #     print(f'{version.action} ??? -> {version.path}')
                     if page_history.changed:
-                        print(f'{version.action} {page_history.old_path} -> {page_history.new_path}')
-                        subprocess.check_call((self.GIT, 'mv', page_history.old_path, page_history.new_path))
-                        subprocess.check_call((self.GIT, 'commit', '-m', 'move'))
+                        page = version.page
+                        print(f'{version.action} {page.locale} {page_history.old_path} -> {page_history.new_path}')
+                        old_path = page.file_path('.', page_history.old_path)
+                        if not old_path.exists():
+                            message = f"Error {old_path} is missing"
+                            errors.append(message)
+                            print(message)
+                        else:
+                            new_path = page.file_path('.', page_history.new_path)
+                            new_path.parent.mkdir(parents=True, exist_ok=True)
+                            # Fixme: remove old directory
+                            subprocess.check_call((self.GIT, 'mv', old_path, new_path))
+                            commit(version, 'move')
                     else:
                         print(f'{version.action} unchanged')
                 case _:
                     raise NotImplementedError(f"Action {version.action}")
+        for _ in errors:
+            print(_)

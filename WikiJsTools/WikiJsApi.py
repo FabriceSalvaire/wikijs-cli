@@ -22,7 +22,7 @@ class BasePage:
 
     ##############################################
 
-    def file_path(self, dst: Path, path: str = None) -> Path:
+    def file_path(self, dst: Path | str, path: str = None) -> Path:
         if path is None:
             path = self.path
         match self.contentType:
@@ -32,7 +32,7 @@ class BasePage:
                 extension = '.txt'
         _ = path.split('/')
         _[-1] += extension
-        return dst.joinpath(self.locale, *_)
+        return Path(dst).joinpath(self.locale, *_)
 
     ##############################################
 
@@ -74,8 +74,12 @@ class BasePage:
                 'privateNS',
                 'contentType',
         ):
-            _ = getattr(self, field)
-            data += f'{field}: {_}' + os.linesep
+            try:
+                _ = getattr(self, field)
+                data += f'{field}: {_}' + os.linesep
+            except AttributeError:
+                # for example updatedAt
+                pass
         data += rule + os.linesep
         data += self.content
         # print(f'{file_path}')
