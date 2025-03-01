@@ -5,6 +5,7 @@ __all__ = ['Cli']
 ####################################################################################################
 
 from pprint import pprint
+import json
 # import logging
 import os
 import subprocess
@@ -310,24 +311,42 @@ class Cli:
 
         # Fixme: progress callback
         #  how to get number of versions ?
-        history = self._api.history()
+        def progress_callback(p: int) -> None:
+            print(f"{p} % done")
+        history = self._api.history(progress_callback)
+
+        with open('history.json', 'w') as fh:
+            data = []
+            for page_history in history:
+                d = {
+                    key: value
+                    for key, value in page_history.__dict__.items()
+                    if key not in ('api', 'page', '_page_version') and value is not None
+                }
+                page_version = page_history.page_version
+                d['locale'] = page_version.locale
+                d['path'] = page_version.path
+                d['pageId'] = page_version.pageId
+                data.append(d)
+            json.dump(data, fh, ensure_ascii=False, indent=4)
+
         errors = []
         for page_history in history:
             version = page_history.page_version
-            match version.action:
-                # case 'init' | 'edit':
-                case 'updated' | 'restored':
+            if 'content' in version.path:
+                pprint(page_history)
+                pprint(version)
+            # /!\ In some case page_history.actionType = initial and version.action = moved
+            # match version.action:
+            match page_history.actionType:
+                case 'initial' | 'edit':
+                # case 'updated' | 'restored':
                     print(f'{version.action} {version.path}')
                     file_path = version.write('.', check_exists=False)
                     subprocess.check_call((self.GIT, 'add', file_path))
                     commit(version, 'update')
-                # case 'move':
-                case 'moved':
-                    # prev = version.prev
-                    # if prev is not None:
-                    #     print(f'{version.action} {prev.path} -> {version.path}')
-                    # else:
-                    #     print(f'{version.action} ??? -> {version.path}')
+                case 'move':
+                # case 'moved':
                     if page_history.changed:
                         page = version.page
                         print(f'{version.action} {page.locale} {page_history.old_path} -> {page_history.new_path}')
@@ -341,6 +360,9 @@ class Cli:
                             new_path.parent.mkdir(parents=True, exist_ok=True)
                             # Fixme: remove old directory
                             subprocess.check_call((self.GIT, 'mv', old_path, new_path))
+                            # update file
+                            file_path = version.write('.', check_exists=False)
+                            subprocess.check_call((self.GIT, 'add', file_path))
                             commit(version, 'move')
                     else:
                         print(f'{version.action} unchanged')

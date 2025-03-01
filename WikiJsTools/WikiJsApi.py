@@ -1,5 +1,6 @@
 ####################################################################################################
 
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterator
@@ -67,8 +68,9 @@ class BasePage:
                 'createdAt',
                 'updatedAt',
 
-                'id',
-                'versionId'
+                'id', 'pageId',
+                'versionId',
+                'versionDate',
                 'isPublished',
                 'isPrivate',
                 'privateNS',
@@ -584,14 +586,21 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
 
     ##############################################
 
-    def history(self) -> list[PageHistory]:
-        # , progress_callback
-        history = [_ for page in self.yield_pages() for _ in page.history]
-        # history = []
-        # for page in self.yield_pages():
-        #     print(f'{page.path}')
-        #     for _ in page.history:
-        #         history.append(_)
+    def history(self, progress_callback, preload_version: bool = True) -> list[PageHistory]:
+        # history = [_ for page in self.yield_pages() for _ in page.history]
+        history = []
+        P_STEP = 10
+        next_p = P_STEP
+        for i, page in enumerate(self.yield_pages()):
+            p = 100 * i / self._number_of_pages
+            if p > next_p:
+                progress_callback(int(p))
+                next_p += P_STEP
+            print(f'{page.path}')
+            for _ in page.history:
+                if preload_version:
+                    _.page_version
+                history.append(_)
         history.sort(key=lambda _: _.date)
         # for _ in history:
         #     print(f'{_.versionId} {_.date} {_.page.id} {_.page.path} {_.actionType}')
