@@ -23,6 +23,12 @@ class BasePage:
 
     ##############################################
 
+    @property
+    def url(self) -> str:
+        return f'{self.api.api_url}/{self.locale}/{self.path}'
+
+    ##############################################
+
     def file_path(self, dst: Path | str, path: str = None) -> Path:
         if path is None:
             path = self.path
@@ -284,9 +290,15 @@ class WikiJsApi:
 
     ##############################################
 
+    @property
+    def api_url(self) -> str:
+        return self._api_url
+
+    ##############################################
+
     def query_wikijs(self, query: dict) -> dict:
         # print(f"API {query}")
-        response = requests.post(self._api_url, json=query, headers=self._headers)
+        response = requests.post(f'{self._api_url}/graphql', json=query, headers=self._headers)
         if response.status_code != requests.codes.ok:
             raise NameError(f"Error {response}")
         data = response.json()
