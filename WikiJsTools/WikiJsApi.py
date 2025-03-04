@@ -257,6 +257,30 @@ class PageHistory:
 
 ####################################################################################################
 
+@dataclass
+class AssetFolder:
+    id: int
+    name: str
+    slug: str
+
+    # parent: 'AssetFolder'
+
+####################################################################################################
+
+@dataclass
+class Asset:
+      id: int
+      filename: str
+      ext: str
+      kind: str
+      mime: str
+      fileSize: int
+      metadata: str
+      createdAt: str
+      updatedAt: str
+
+####################################################################################################
+
 def xpath(data: dict, path: str) -> dict:
     d = data
     for _ in path.split('/'):
@@ -471,6 +495,55 @@ query ($id: Int!)
         history = xpath(data, 'data/pages/history/trail')
         # _ = xpath(data, 'data/pages/history/total')
         return [PageHistory(api=self, page=page, **_) for _ in history]
+
+    ##############################################
+
+    def list_asset_subfolder(self, folder_id: int = 0) -> Iterator[AssetFolder]:
+        query = {
+            'variables': {
+                'parentFolderId': folder_id,
+            },
+            'query': '''
+query ($parentFolderId: Int!) {
+  assets {
+    folders(parentFolderId: $parentFolderId) {
+      id
+      name
+      slug
+}}}''',
+        }
+        data = self.query_wikijs(query)
+        for _ in xpath(data, 'data/assets/folders'):
+            yield AssetFolder(**_)
+
+    ##############################################
+
+    def list_asset(self, folder_id: int) -> Asset:
+        query = {
+            'variables': {
+                'folderId': folder_id,
+                'kind': 'ALL',
+            },
+            'query': '''
+query ($folderId: Int!, $kind: AssetKind!) {
+  assets {
+    list(folderId: $folderId, kind: $kind) {
+      id
+      filename
+      ext
+      kind
+      mime
+      fileSize
+      metadata
+      createdAt
+      updatedAt
+}}}''',
+        # folder: AssetFolder
+        # author: Author
+        }
+        data = self.query_wikijs(query)
+        for _ in  xpath(data, 'data/assets/list'):
+            yield Asset(**_)
 
     ##############################################
 

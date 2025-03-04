@@ -267,6 +267,23 @@ class Cli:
 
     ##############################################
 
+    def asset(self) -> None:
+        def show_folder(folder_id: int = 0, indent: int = 0, stack: list = []):
+            indent_str = '  '*indent
+            for asset in self._api.list_asset(folder_id):
+                print(f"{indent_str}- {asset.filename}")
+                url = '/'.join([self._api.api_url] + stack + [asset.filename])
+                print(f"{indent_str}  {url}")
+            for _ in self._api.list_asset_subfolder(folder_id):
+                # print(f"{indent_str}- {_.name} {_.slug} {_.id}")
+                print(f"{indent_str}+ {_.name}")
+                show_folder(_.id, indent + 1, stack + [_.name])
+        print('/')
+        show_folder()
+        # https://wiki.fabrice-salvaire.fr/wiki-vera/recettes/buche-banane-chocolat-ferrandi.png
+
+    ##############################################
+
     def sync(self, path: Path = None) -> None:
         if path is None:
             path = Path('.', 'sync')
@@ -368,6 +385,8 @@ class Cli:
                 case _:
                     raise NotImplementedError(f"Action {version.action}")
 
+        # Assets
+
         # Now write history.json
         with open(self.HISTORY_JSON, 'w') as fh:
             # Fixme: reset ?
@@ -399,6 +418,7 @@ class Cli:
         for page in pages:
             # print(f"Checking {page.path}")
             page.complete()
+            dead_links = []
             for line in page.content.splitlines():
                 start = 0
                 while True:
@@ -416,12 +436,23 @@ class Cli:
                             else:
                                 extension = None
                             if (not re.match('^https?\\://', path)
-                                and extension not in ('.png', '.jpg', '.pdf')
+                                and extension not in ('.png', '.jpg', '.webp', '.ods', '.pdf')
                                 and path not in page_paths):
-                                _ = f"<red>Page</red> <blue>{page.url}</blue> <red>as deak link</red> <green>{path}</green>{LINESEP}{line}"
-                                print_formatted_text(
-                                    HTML(_),
-                                    style=self.STYLE,
-                                )
+                                message = f"  <green>{path}</green>{LINESEP}    |{line}"
+                                if path:
+                                    parts = path.split('/')
+                                    name = parts[-1]
+                                    for _ in page_paths:
+                                        name2 = _.split('/')[-1]
+                                        if name in name2:
+                                            message += f"{LINESEP}    <blue>found</blue> <green>{_}</green>"
+                                    dead_links.append(message)
                     else:
                         break
+            if dead_links:
+                _ = f"<red>Page</red> <blue>{page.url}</blue> <red>as deak link</red>" + LINESEP
+                _ += LINESEP.join(dead_links)
+                print_formatted_text(
+                    HTML(_),
+                    style=self.STYLE,
+                )
