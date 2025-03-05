@@ -1,7 +1,14 @@
 *~
 __pycache__/
 
+# SECRET
 config.yaml
 
 out/
 resources/
+
+cli_history
+review.json
+
+notes/wikijs.sh
+notes/query-example.md
