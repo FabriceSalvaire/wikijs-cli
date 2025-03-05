@@ -1,3 +1,6 @@
+- check delete
+- asset upload
+
 - dump wiki to disk
   add metadata or use git ?
 - sync wiki / git

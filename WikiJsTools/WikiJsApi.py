@@ -19,6 +19,23 @@ import requests
 
 ####################################################################################################
 
+@dataclass
+class PageTreeItem:
+    api: 'WikiJsApi'
+
+    id: int
+    path: str
+    depth: int
+    title: str
+    isPrivate: bool
+    isFolder: bool
+    privateNS: str
+    parent: int
+    pageId: int
+    locale: str
+
+####################################################################################################
+
 class BasePage:
 
     ##############################################
@@ -293,6 +310,15 @@ class Asset:
 
 ####################################################################################################
 
+@dataclass
+class ResponseResult:
+    succeeded: bool
+    errorCode: int
+    slug: str
+    message: str
+
+####################################################################################################
+
 def xpath(data: dict, path: str) -> dict:
     d = data
     for _ in path.split('/'):
@@ -413,7 +439,6 @@ query ($path: String!, $locale: String!)
 
     def yield_pages(self) -> Iterator[Page]:
         # Query > PageQuery > PageListItem
-        # TITLE
         query = {
             'query': '''
 {pages {
@@ -441,19 +466,17 @@ query ($path: String!, $locale: String!)
 
     ##############################################
 
-    def yield_tree(self, path: str) -> Iterator[Page]:
+    def yield_tree(self, path: str = 'home') -> Iterator[Page]:
+        """List the pages and folders in the parent of the page at `path`.
+        When `includeAncestors` is True, the parent directories are also listed.
+        """
         # Query > PageQuery > PageTreeItem
-        # TITLE
         query = {
             'variables': {
                 'path': path,
                 # 'parent': 3,
                 'locale': 'fr'
             },
-# query ($parent: Int, $locale: String!)
-# {pages {
-#   tree(parent: $parent, mode: ALL, locale: $locale) {
-# PAGES
             'query': '''
 query ($path: String!, $locale: String!)
 {pages {
@@ -472,9 +495,8 @@ query ($path: String!, $locale: String!)
 ''',
         }
         data = self.query_wikijs(query)
-        pprint(data)
-        # for _ in xpath(data, 'data/pages/list'):
-        #     yield Page(api=self, **_)
+        for _ in xpath(data, 'data/pages/tree'):
+            yield PageTreeItem(api=self, **_)
 
     ##############################################
 
@@ -641,6 +663,50 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
         # 'slug': 'ok',
         # 'succeeded': True}}}}}
 
+   ##############################################
+
+    def create_page(self, path: str, title: str, content: str) -> None:
+        query = {
+            'variables': {
+                'content': content,
+                'description': '',
+                'editor': 'markdown',
+                'isPublished': True,
+                'isPrivate': False,
+                'locale': 'fr',
+                'path': path,
+                'publishEndDate': '',
+                'publishStartDate': '',
+                'scriptCss': '',
+                'scriptJs': '',
+                'tags': [],
+                'title': title,
+            },
+            "query": """
+ mutation ($content: String!, $description: String!, $editor: String!, $isPrivate: Boolean!, $isPublished: Boolean!, $locale: String!, $path: String!, $publishEndDate: Date, $publishStartDate: Date, $scriptCss: String, $scriptJs: String, $tags: [String]!, $title: String!) {
+  pages {
+    create(content: $content, description: $description, editor: $editor, isPrivate: $isPrivate, isPublished: $isPublished, locale: $locale, path: $path, publishEndDate: $publishEndDate, publishStartDate: $publishStartDate, scriptCss: $scriptCss, scriptJs: $scriptJs, tags: $tags, title: $title) {
+      responseResult {
+        succeeded
+        errorCode
+        slug
+        message
+      }
+      page {
+        id
+        updatedAt
+      }
+    }
+  }
+}
+""",
+        }
+        # pprint(query)
+        data = self.query_wikijs(query)
+        # pprint(data)
+        _ = xpath(data, 'data/pages/create/responseResult')
+        return ResponseResult(**_)
+
     ##############################################
 
     def update_page(self, page: Page, content: str) -> None:
@@ -652,9 +718,9 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
                 'content': content,
                 'description': '',
                 'editor': 'markdown',
-                'locale': page.locale,
                 'isPrivate': False,
                 'isPublished': True,
+                'locale': page.locale,
                 'path': page.path,
                 'publishEndDate': '',
                 'publishStartDate': '',
