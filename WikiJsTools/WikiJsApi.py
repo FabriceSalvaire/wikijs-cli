@@ -269,15 +269,27 @@ class AssetFolder:
 
 @dataclass
 class Asset:
-      id: int
-      filename: str
-      ext: str
-      kind: str
-      mime: str
-      fileSize: int
-      metadata: str
-      createdAt: str
-      updatedAt: str
+    id: int
+    filename: str
+    ext: str
+    kind: str
+    mime: str
+    fileSize: int
+    metadata: str
+    createdAt: str
+    updatedAt: str
+
+    path: str = None
+
+    ##############################################
+
+    @property
+    def created_at(self) -> datetime:
+        return datetime.fromisoformat(self.createdAt)
+
+    @property
+    def updated_at(self) -> datetime:
+        return datetime.fromisoformat(self.updatedAt)
 
 ####################################################################################################
 
@@ -331,6 +343,16 @@ class WikiJsApi:
             raise NameError
         else:
             return data
+
+
+    ##############################################
+
+    def get(self, url: str) -> bytes:
+        url = f'{self._api_url}/{url}'
+        response = requests.get(url, headers=self._headers)
+        if response.status_code != requests.codes.ok:
+            raise NameError(f"Error {response}")
+        return response.content
 
     ##############################################
 

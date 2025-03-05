@@ -308,16 +308,18 @@ class Cli:
             return
 
         if path is None:
-            path = Path('.', self.GIT_SYNC).resolve()
-        print(f"Git path {path}")
+            sync_dir = Path('.', self.GIT_SYNC).resolve()
+        else:
+            sync_dir = Path(path)
+        print(f"Git path {sync_dir}")
 
         created = False
-        if path.exists():
+        if sync_dir.exists():
             print("Git already initialised")
         else:
-            path.mkdir()
+            sync_dir.mkdir()
             created = True
-        os.chdir(path)
+        os.chdir(sync_dir)
         json_versions = []
         last_version_date = None
         if created:
@@ -386,6 +388,41 @@ class Cli:
                     raise NotImplementedError(f"Action {version.action}")
 
         # Assets
+        # asset_path = sync_dir.joinpath('_assets')
+        asset_path = Path('_assets')
+        asset_path.mkdir(parents=True, exist_ok=True)
+        # Collect current asset list
+        paths = []
+        for dirpath, dirnames, filenames in asset_path.walk():
+            dirpath = Path(dirpath)
+            for filename in filenames:
+                _ = dirpath.joinpath(filename)
+                paths.append(_)
+
+        def process_folder(folder_id: int = 0, stack: list = []):
+            for asset in self._api.list_asset(folder_id):
+                # url = '/'.join([self._api.api_url] + stack + [asset.filename])
+                asset.path = '/'.join(stack + [asset.filename])
+                yield asset
+            for _ in self._api.list_asset_subfolder(folder_id):
+                yield from process_folder(_.id, stack + [_.name])
+
+        # To Git add, we must sort by date
+        for asset in process_folder():
+            data = self._api.get(asset.path)
+            path = asset_path.joinpath(asset.path)   # .split('/')
+            paths.remove(path)
+            # asset.created_at.timestamp()
+            mtime = asset.updated_at.timestamp()
+            if not (path.exists() or path.stat().st_mtime == mtime):
+                print(f"Write {asset.path}")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+                os.utime(path, (mtime, mtime))
+
+        # Clean old assets
+        for _ in paths:
+            _.unlink()
 
         # Now write history.json
         with open(self.HISTORY_JSON, 'w') as fh:
