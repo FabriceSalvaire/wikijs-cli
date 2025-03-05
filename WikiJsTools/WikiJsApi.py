@@ -38,6 +38,8 @@ class PageTreeItem:
 
 class BasePage:
 
+    RULE = '-'*50
+
     ##############################################
 
     @property
@@ -46,21 +48,70 @@ class BasePage:
 
     ##############################################
 
-    def file_path(self, dst: Path | str, path: str = None) -> Path:
-        if path is None:
-            path = self.path
-        match self.contentType:
+    @classmethod
+    def file_path2(
+            cls,
+            dst: Path | str,
+            locale: str,
+            path: str = None,
+            content_type: str = 'markdown',
+    ) -> Path:
+        match content_type:
             case 'markdown':
                 extension = '.md'
             case _:
                 extension = '.txt'
         _ = path.split('/')
         _[-1] += extension
-        return Path(dst).joinpath(self.locale, *_)
+        return Path(dst).joinpath(locale, *_)
 
     ##############################################
 
-    def write(self, dst: Path, check_exists: bool = True) -> Path:
+    def file_path(self, dst: Path | str, path: str = None, content_type: str = 'markdown') -> Path:
+        if path is None:
+            path = self.path
+        self.file_path2(dst, self.locale, path, self.contentType)
+
+    ##############################################
+
+    @classmethod
+    def template(
+            cls,
+            dst: Path | str,
+            locale: str,
+            path: str = None,
+            content_type: str = 'markdown',
+            check_exists: bool = True,
+    ) -> Path:
+        dst = Path(dst)
+        if check_exists and dst.exists():
+            return
+
+        data = ''
+        # data += cls.RULE + os.linesep
+        for field, value in dict(
+                title='',
+                locale=locale,
+                path=path,
+                description='',
+                tags=[],
+                # createdAt='',
+                # updatedAt='',
+
+                isPublished=True,
+                isPrivate=False,
+                privateNS=None,
+                contentType=content_type,
+        ).items():
+            data += f'{field}: {value}' + os.linesep
+        data += cls.RULE + os.linesep
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_text(data, encoding='utf8')
+        return dst
+
+    ##############################################
+
+    def write(self, dst: Path | str, check_exists: bool = True) -> Path:
         file_path = self.file_path(dst)
 
         if check_exists:
@@ -80,8 +131,7 @@ class BasePage:
                     return
 
         data = ''
-        rule = '-'*50
-        # data += rule + os.linesep
+        # data += self.RULE + os.linesep
         for field in (
                 'title',
                 'locale',
@@ -105,13 +155,36 @@ class BasePage:
             except AttributeError:
                 # for example updatedAt
                 pass
-        data += rule + os.linesep
-        data += self.content
+        data += self.RULE + os.linesep
+        data += self.content.rstrip()
         # print(f'{file_path}')
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(file_path, 'w') as fh:
-            fh.write(data)
+        file_path.write_text(data, encoding='utf8')
         return file_path
+
+    ##############################################
+
+    @classmethod
+    def read(self, input: Path | str, api: 'WikiJsApi') -> 'Page':
+        input = Path(input)
+        data = {}
+        with open(input, 'r', encoding='utf8') as fh:
+            content = None
+            for line in fh.readlines():
+                if content is None:
+                    line = line.strip()
+                    if line == self.RULE:
+                        content = ''
+                    else:
+                        key, value = [_.strip() for _ in line.split(':')]
+                        data[key] = value
+                else:
+                    content += line
+            data['content'] = content
+        data['tags'] = [_.strip() for _ in data['tags'][1:-1].split(',') if _.strip()]
+        for _ in ('isPublished', 'isPrivate'):
+            data[_] = True if data[_] == 'True' else False
+        return Page(api, **data, id=None, createdAt=None, updatedAt=None)
 
 ####################################################################################################
 
@@ -665,23 +738,26 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
 
    ##############################################
 
-    def create_page(self, path: str, title: str, content: str) -> None:
+    def create_page(self, page: Page) -> None:
+        variables = {_: getattr(page, _) for _ in (
+            'content',
+            'description',
+            'isPublished',
+            'isPrivate',
+            'locale',
+            'path',
+            'tags',
+            'title',
+        )}
+        variables.update({
+            'editor': page.contentType,
+            'publishEndDate': '',
+            'publishStartDate': '',
+            'scriptCss': '',
+            'scriptJs': '',
+        })
         query = {
-            'variables': {
-                'content': content,
-                'description': '',
-                'editor': 'markdown',
-                'isPublished': True,
-                'isPrivate': False,
-                'locale': 'fr',
-                'path': path,
-                'publishEndDate': '',
-                'publishStartDate': '',
-                'scriptCss': '',
-                'scriptJs': '',
-                'tags': [],
-                'title': title,
-            },
+            'variables': variables,
             "query": """
  mutation ($content: String!, $description: String!, $editor: String!, $isPrivate: Boolean!, $isPublished: Boolean!, $locale: String!, $path: String!, $publishEndDate: Date, $publishStartDate: Date, $scriptCss: String, $scriptJs: String, $tags: [String]!, $title: String!) {
   pages {

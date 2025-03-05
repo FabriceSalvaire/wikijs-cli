@@ -21,6 +21,7 @@ from prompt_toolkit import PromptSession, HTML
 from prompt_toolkit import print_formatted_text, shortcuts
 from prompt_toolkit.completion import WordCompleter
 # from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 
 from .WikiJsApi import Page, WikiJsApi
@@ -35,6 +36,7 @@ LINESEP = os.linesep
 
 class Cli:
 
+    CLI_HISTORY = Path('cli_history')
     GIT = '/usr/bin/git'
     GIT_SYNC = 'git_sync'
     HISTORY_JSON = 'history.json'
@@ -58,11 +60,17 @@ class Cli:
     })
 
     COMPLETER = WordCompleter([
+        'asset',
+        'check',
         'clear',
+        'create',
         'dump',
+        'git_sync'
         'list',
         'move',
         'quit',
+        'sync',
+        'template'
         'update',
         'usage',
     ])
@@ -120,8 +128,10 @@ class Cli:
             if not self.run(query):
                 return
 
+        history = FileHistory(self.CLI_HISTORY)
         session = PromptSession(
             completer=self.COMPLETER,
+            history=history,
         )
         self.usage()
         while True:
@@ -160,6 +170,12 @@ class Cli:
             "  <blue>list</blue>: list all the pages",
             "  <blue>move</blue> <green>@page_url@ @new_page_url@</green>: move a page",
             "  <blue>update</blue> <green>@page_url@ input</green>: update the page",
+            "  <blue>create</blue> <green>input</green>: create a page",
+            "  <blue>template</blue> <green>output</green>: create a page template",
+            "  <blue>check</blue>: check pages",
+            "  <blue>asset</blue>: list all the assets",
+            "  <blue>sync</blue>: sync wiki on disk",
+            "  <blue>git_sync</blue>: sync wiki on a Git repo",
             "<red>Exit</red> using command <blue>quit</blue> or <blue>Ctrl+d</blue>"
         ):
             print_formatted_text(
@@ -190,14 +206,16 @@ class Cli:
     ##############################################
 
     def tree(self, path: str) -> None:
-        for page in self._api.yield_tree(path):
-            pass
-            # page.complete()
-            # _ = f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> {len(page.content):5} @{page.locale} {page.id:3}"
-            # print_formatted_text(
-            #     HTML(_),
-            #     style=self.STYLE,
-            # )
+        pages = list(self._api.yield_tree(path))
+        pages.sort(key=lambda _: _.path)
+        for page in pages:
+            is_folder = '/' if page.isFolder else ''
+            path = f"{page.path}{is_folder}"
+            _ = f"<green>{path:60}</green> <blue>{page.title:40}</blue>"
+            print_formatted_text(
+                HTML(_),
+                style=self.STYLE,
+            )
 
     ##############################################
 
@@ -215,13 +233,33 @@ class Cli:
             output = Path(output)
             if not output.parent.exists():
                 raise NameError(f"path doesn't exists {output.parent}")
-            with open(output, mode='w', encoding='utf8') as fh:
-                fh.write(page.content)
+            output.write_text(page.content, encoding='utf8')
         else:
             rule = '\u2500' * 100
             print(rule)
             print(page.content)
             print(rule)
+
+   ##############################################
+
+    def template(self, dst: str, path: str, locale: str = 'fr', content_type: str = 'markdown') -> None:
+        if Page.template(dst, locale, path, content_type) is None:
+            _ = f"<red>Error: file exists</red>"
+            print_formatted_text(
+                HTML(_),
+                style=self.STYLE,
+            )
+
+   ##############################################
+
+    def create(self, input: str) -> None:
+        page = Page.read(input, self._api)
+        response = self._api.create_page(page)
+        _ = f"<red>{response.message}</red>"
+        print_formatted_text(
+            HTML(_),
+            style=self.STYLE,
+        )
 
    ##############################################
 
@@ -235,8 +273,7 @@ class Cli:
             HTML(_),
             style=self.STYLE,
         )
-        with open(input, mode='r', encoding='utf8') as fh:
-            content = fh.read()
+        content = input.readtext(encoding='utf8')
         rule = '\u2500' * 100
         print(rule)
         print(page.content)
@@ -280,7 +317,6 @@ class Cli:
                 show_folder(_.id, indent + 1, stack + [_.name])
         print('/')
         show_folder()
-        # https://wiki.fabrice-salvaire.fr/wiki-vera/recettes/buche-banane-chocolat-ferrandi.png
 
     ##############################################
 
