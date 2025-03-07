@@ -19,6 +19,25 @@ import requests
 ####################################################################################################
 
 @dataclass
+class ResponseResult:
+    succeeded: bool
+    errorCode: int
+    slug: str
+    message: str
+
+####################################################################################################
+
+@dataclass
+class Tag:
+    id: int
+    tag: str
+    title: str
+    createdAt: str
+    updatedAt: str
+
+####################################################################################################
+
+@dataclass
 class PageTreeItem:
     api: 'WikiJsApi'
 
@@ -347,21 +366,27 @@ class PageHistory:
 ####################################################################################################
 
 @dataclass
-class Tag:
-    id: int
-    tag: str
-    title: str
-    createdAt: str
-    updatedAt: str
-
-####################################################################################################
-
-@dataclass
 class PageLinkItem:
     id: int
     path: str
     title: str
     links: list[str]
+
+####################################################################################################
+
+@dataclass
+class PageSearchResult:
+    id: str
+    title: str
+    description: str
+    path: str
+    locale: str
+
+@dataclass
+class PageSearchResponse:
+    results: list[PageSearchResult]
+    suggestions: list[str]
+    totalHits: int
 
 ####################################################################################################
 
@@ -415,46 +440,11 @@ class Asset:
 
 ####################################################################################################
 
-@dataclass
-class ResponseResult:
-    succeeded: bool
-    errorCode: int
-    slug: str
-    message: str
-
-####################################################################################################
-
-@dataclass
-class PageSearchResult:
-    id: str
-    title: str
-    description: str
-    path: str
-    locale: str
-
-@dataclass
-class PageSearchResponse:
-    results: list[PageSearchResult]
-    suggestions: list[str]
-    totalHits: int
-
-####################################################################################################
-
 def xpath(data: dict, path: str) -> dict:
     d = data
     for _ in path.split('/'):
         d = d[_]
     return d
-
-####################################################################################################
-
-# json_query = '{"operationName":null, "variables":{}, "query":"{pages {list(orderBy: TITLE) {id path title}}}"}'
-# r = requests.post(API_URL, data=json_query, headers=HEADERS)
-# print(r.content)
-
-# "query ($query: String!) {\n pages {\n searchTags(query: $query)\n __typename\n }\n}\n"
-
-# "query ($path: String, $locale: String!) {\n pages {\n tree(path: $path, mode: ALL, locale: $locale, includeAncestors: true) {\n id\n path\n title\n isFolder\n pageId\n parent\n locale\n __typename\n }\n __typename\n }\n}\n"
 
 ####################################################################################################
 
