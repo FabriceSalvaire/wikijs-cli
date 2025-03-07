@@ -24,7 +24,7 @@ from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 
-from .WikiJsApi import Page, WikiJsApi
+from .WikiJsApi import Page, WikiJsApi, AssetFolder
 
 ####################################################################################################
 
@@ -59,22 +59,6 @@ class Cli:
         'greenblue': '#19bb9c',
     })
 
-    COMPLETER = WordCompleter([
-        'asset',
-        'check',
-        'clear',
-        'create',
-        'dump',
-        'git_sync'
-        'list',
-        'move',
-        'quit',
-        'sync',
-        'template'
-        'update',
-        'usage',
-    ])
-
     ##############################################
 
     def __init__(self, api: WikiJsApi) -> None:
@@ -84,6 +68,22 @@ class Cli:
             for _ in dir(self)
             if not (_.startswith('_') or _[0].isupper() or _ in ('cli', 'run'))
         ]
+        self.COMMANDS.sort()
+        self.COMPLETER = WordCompleter(self.COMMANDS)
+        self._asset_folders = None
+        self._asset_folder = None
+
+    ##############################################
+
+    @staticmethod
+    def to_bool(value: str) -> bool:
+        if isinstance(value, bool):
+            return value
+        match str(value).lower():
+            case 'true' | 't':
+                return True
+            case _:
+                return False
 
     ##############################################
 
@@ -104,11 +104,7 @@ class Cli:
                 print(traceback.format_exc())
                 print(e)
         except AttributeError:
-            _ = f"<red>Invalid command</red> <blue>{query}</blue>"
-            print_formatted_text(
-                HTML(_),
-                style=self.STYLE,
-            )
+            self.print(f"<red>Invalid command</red> <blue>{query}</blue>")
             self.usage()
         return True
 
@@ -156,6 +152,14 @@ class Cli:
 
     ##############################################
 
+    def print(self, message: str) -> None:
+        print_formatted_text(
+            HTML(message),
+            style=self.STYLE,
+        )
+
+    ##############################################
+
     def clear(self) -> None:
         shortcuts.clear()
 
@@ -178,44 +182,30 @@ class Cli:
             "  <blue>git_sync</blue>: sync wiki on a Git repo",
             "<red>Exit</red> using command <blue>quit</blue> or <blue>Ctrl+d</blue>"
         ):
-            print_formatted_text(
-                HTML(_),
-                style=self.STYLE,
-            )
+            self.print(_)
 
     ##############################################
 
     def list(self) -> None:
-        for page in self._api.yield_pages():
+        for page in self._api.list_pages():
             page.complete()
-            _ = f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> {len(page.content):5} @{page.locale} {page.id:3}"
-            print_formatted_text(
-                HTML(_),
-                style=self.STYLE,
-            )
+            self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> {len(page.content):5} @{page.locale} {page.id:3}")
 
-        # if page.path.startswith('home/bricolage/'):
-        # print()
-        # print(f"{page.path} @{page.locale}")
-        # print(f"  {page.title}")
+    ##############################################
 
-        # print(f"  {page.id}")
-
-        # print(page.content)
+    def last(self) -> None:
+        for page in self._api.list_pages(order_by='UPDATED', reverse=True, limit=10):
+            self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue>{LINESEP}  {page.updated_at}   @{page.locale}   {page.id:3}")
 
     ##############################################
 
     def tree(self, path: str) -> None:
-        pages = list(self._api.yield_tree(path))
+        pages = list(self._api.tree(path))
         pages.sort(key=lambda _: _.path)
         for page in pages:
             is_folder = '/' if page.isFolder else ''
             path = f"{page.path}{is_folder}"
-            _ = f"<green>{path:60}</green> <blue>{page.title:40}</blue>"
-            print_formatted_text(
-                HTML(_),
-                style=self.STYLE,
-            )
+            self.print(f"<green>{path:60}</green> <blue>{page.title:40}</blue>")
 
     ##############################################
 
@@ -225,10 +215,7 @@ class Cli:
         _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
         _ += f"  <blue>{page.title}</blue>{LINESEP}"
         _ += f"  {page.id}{LINESEP}"
-        print_formatted_text(
-            HTML(_),
-            style=self.STYLE,
-        )
+        self.print(_)
         if output:
             output = Path(output)
             if not output.parent.exists():
@@ -240,28 +227,20 @@ class Cli:
             print(page.content)
             print(rule)
 
-   ##############################################
+    ##############################################
 
     def template(self, dst: str, path: str, locale: str = 'fr', content_type: str = 'markdown') -> None:
         if Page.template(dst, locale, path, content_type) is None:
-            _ = f"<red>Error: file exists</red>"
-            print_formatted_text(
-                HTML(_),
-                style=self.STYLE,
-            )
+            self.print(f"<red>Error: file exists</red>")
 
-   ##############################################
+    ##############################################
 
     def create(self, input: str) -> None:
         page = Page.read(input, self._api)
         response = self._api.create_page(page)
-        _ = f"<red>{response.message}</red>"
-        print_formatted_text(
-            HTML(_),
-            style=self.STYLE,
-        )
+        self.print(f"<red>{response.message}</red>")
 
-   ##############################################
+    ##############################################
 
     def update(self, path: str, input: str = None) -> None:
         page = self._api.page(path)
@@ -269,10 +248,7 @@ class Cli:
         _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
         _ += f"  <blue>{page.title}</blue>{LINESEP}"
         _ += f"  {page.id}{LINESEP}"
-        print_formatted_text(
-            HTML(_),
-            style=self.STYLE,
-        )
+        self.print(_)
         content = input.readtext(encoding='utf8')
         rule = '\u2500' * 100
         print(rule)
@@ -283,40 +259,78 @@ class Cli:
     ##############################################
 
     def move(self, old_path: str, new_path: str, dryrun: bool = False) -> None:
-        _ = f"  Move: <green>{old_path}</green> <red>-></red> <blue>{new_path}</blue>"
-        print_formatted_text(
-            HTML(_),
-            style=self.STYLE,
-        )
-        for page in self._api.yield_pages():
+        dryrun = self.to_bool(dryrun)
+        self.print(f"  Move: <green>{old_path}</green> <red>-></red> <blue>{new_path}</blue>")
+        for page in self._api.list_pages():
             # for _ in ('portail',):
             # if page.path.lower().startswith('.../' + _):
             # print(page.path)
             if page.path.startswith(old_path):
                 dest = page.path.replace(old_path, new_path)
-                _ = f"  Move page: <green>{page.path}</green> <red>-></red> <blue>{dest}</blue>"
-                print_formatted_text(
-                    HTML(_),
-                    style=self.STYLE,
-                )
+                self.print(f"  Move page: <green>{page.path}</green> <red>-></red> <blue>{dest}</blue>")
                 if not dryrun:
-                    page.move(dest)
+                    response = page.move(dest)
+                    self.print(f"<red>{response.message}</red>")
 
     ##############################################
 
-    def asset(self) -> None:
+    def asset(self, show_files: bool = True, show_folder_path: bool = False) -> None:
+        show_files = self.to_bool(show_files)
+        # Build asset folder tree
+        self._asset_folders = {
+            '/': AssetFolder(self, id=0, name='', slug='')
+        }
         def show_folder(folder_id: int = 0, indent: int = 0, stack: list = []):
             indent_str = '  '*indent
-            for asset in self._api.list_asset(folder_id):
-                print(f"{indent_str}- {asset.filename}")
-                url = '/'.join([self._api.api_url] + stack + [asset.filename])
-                print(f"{indent_str}  {url}")
+            if show_files:
+                for asset in self._api.list_asset(folder_id):
+                    self.print(f"{indent_str}- <blue>{asset.filename}</blue>   {asset.updated_at}   <green>{asset.id}</green>")
+                    url = '/'.join([self._api.api_url] + stack + [asset.filename])
+                    self.print(f"{indent_str}  {url}")
             for _ in self._api.list_asset_subfolder(folder_id):
+                path = '/'.join(stack + [_.name])
+                _.path = path
+                self._asset_folders[path] = _
                 # print(f"{indent_str}- {_.name} {_.slug} {_.id}")
-                print(f"{indent_str}+ {_.name}")
+                if show_folder_path:
+                    self.print(f"<red>{path}</red>    <green>{_.id}</green>")
+                else:
+                    self.print(f"{indent_str}+ <red>{_.name}</red>    <green>{_.id}</green>")
                 show_folder(_.id, indent + 1, stack + [_.name])
-        print('/')
+        self.print('<blue>/</blue>')
         show_folder()
+
+    ##############################################
+
+    def cd_asset(self, path: str) -> None:
+        if self._asset_folders is None:
+            self.asset(show_files=False, show_folder_path=True)
+        try:
+            self._asset_folder = self._asset_folders[path]
+            self.print(f"<red>moved to</red> <blue>{path}</blue>")
+        except KeyError:
+            self.print(f"<red>Error:</red> <blue>{path}</blue> <red>not found</red>")
+
+    ##############################################
+
+    def upload(self, path: Path | str, name: str = None) -> None:
+        if self._asset_folder is not None:
+            self._asset_folder.upload(path, name)
+            assets = list(self._asset_folder.list())
+            assets.sort(key=lambda _: _.updated_at, reverse=True)
+            self.print(f'<blue>{self._asset_folder.path}</blue>')
+            for asset in assets:
+                self.print(f'- <blue>{asset.filename}</blue>   {asset.updated_at}')
+        else:
+            self.print(f"<red>Error: run cd_asset before</red>")
+
+    ##############################################
+
+    def search(self, query: str) -> None:
+        response = self._api.search(query)
+        self.print(f'Suggestions: <blue>{response.suggestions}</blue>')
+        for _ in response.results:
+            self.print(f'- <blue>{_.path:60}</blue> <green>{_.title}</green>')
 
     ##############################################
 
@@ -326,7 +340,7 @@ class Cli:
         path.mkdir(exist_ok=True)
 
         # i = 0
-        for page in self._api.yield_pages():
+        for page in self._api.list_pages():
             page.complete()
             file_path = page.sync(path)
             if file_path is not None:
@@ -483,10 +497,10 @@ class Cli:
             # }
             json.dump(json_versions, fh, ensure_ascii=False, indent=4)
 
-   ##############################################
+    ##############################################
 
     def check(self) -> None:
-        pages = list(self._api.yield_pages())
+        pages = list(self._api.list_pages())
         page_paths = [_.path for _ in pages]
         for page in pages:
             # print(f"Checking {page.path}")
@@ -525,7 +539,27 @@ class Cli:
             if dead_links:
                 _ = f"<red>Page</red> <blue>{page.url}</blue> <red>as deak link</red>" + LINESEP
                 _ += LINESEP.join(dead_links)
-                print_formatted_text(
-                    HTML(_),
-                    style=self.STYLE,
-                )
+                self.print(_)
+
+    ##############################################
+
+    def tags(self) -> None:
+        for _ in self._api.tags():
+            self.print(f'<blue>{_.tag:30}</blue> <green>{_.title}</green>')
+
+    ##############################################
+
+    def search_tags(self, query: str) -> None:
+        for _ in self._api.search_tags(query):
+            self.print(f'<blue>{_}</blue>')
+
+    ##############################################
+
+    def links(self) -> None:
+        pages = list(self._api.links())
+        pages.sort(key=lambda _: _.path)
+        for page in pages:
+            self.print(f'<blue>{page.path:60}</blue>')
+            # sorted()
+            for _ in page.links:
+                self.print(f'  <green>{_}</green>')

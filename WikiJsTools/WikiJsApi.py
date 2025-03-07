@@ -1,6 +1,5 @@
 ####################################################################################################
 
-
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterator
@@ -248,11 +247,11 @@ class Page(BasePage):
 
     ##############################################
 
-    def update(self, *args, **kwargs) -> None:
-        self.api.update_page(self, *args, **kwargs)
+    def update(self, *args, **kwargs) -> 'ResponseResult':
+        return self.api.update_page(self, *args, **kwargs)
 
-    def move(self, *args, **kwargs) -> None:
-        self.api.move_page(self, *args, **kwargs)
+    def move(self, *args, **kwargs) -> 'ResponseResult':
+        return self.api.move_page(self, *args, **kwargs)
 
 ####################################################################################################
 
@@ -348,12 +347,45 @@ class PageHistory:
 ####################################################################################################
 
 @dataclass
+class Tag:
+    id: int
+    tag: str
+    title: str
+    createdAt: str
+    updatedAt: str
+
+####################################################################################################
+
+@dataclass
+class PageLinkItem:
+    id: int
+    path: str
+    title: str
+    links: list[str]
+
+####################################################################################################
+
+@dataclass
 class AssetFolder:
+    api: 'WikiJsApi'
+
     id: int
     name: str
     slug: str
 
+    path: str = None
+
     # parent: 'AssetFolder'
+
+    ##############################################
+
+    def list(self) -> Iterator['Asset']:
+        yield from self.api.list_asset(self.id)
+
+    ##############################################
+
+    def upload(self, path: Path | str, name: str = None) -> None:
+        self.api.upload(self.id, path, name)
 
 ####################################################################################################
 
@@ -389,6 +421,22 @@ class ResponseResult:
     errorCode: int
     slug: str
     message: str
+
+####################################################################################################
+
+@dataclass
+class PageSearchResult:
+    id: str
+    title: str
+    description: str
+    path: str
+    locale: str
+
+@dataclass
+class PageSearchResponse:
+    results: list[PageSearchResult]
+    suggestions: list[str]
+    totalHits: int
 
 ####################################################################################################
 
@@ -443,6 +491,23 @@ class WikiJsApi:
         else:
             return data
 
+    ##############################################
+
+    def upload(self, folder_id: int, path: Path | str, name: str = None) -> None:
+        path = Path(path).expanduser().resolve()
+        if name is None:
+            name = path.name
+        payload = path.read_bytes()
+        multipart_form_data = (
+            ('mediaUpload', (None, '{"folderId":' + str(folder_id) + '}')),
+            ('mediaUpload', (name, payload, 'image/png')),
+        )
+        # _ = requests.Request('POST', f'{self._api_url}/u', files=multipart_form_data)
+        # print(_.prepare().body[:100])
+        response = requests.post(f'{self._api_url}/u', files=multipart_form_data, headers=self._headers)
+        if response.status_code != requests.codes.ok:
+            raise NameError(f"Error {response}")
+        # pprint(response)
 
     ##############################################
 
@@ -457,9 +522,10 @@ class WikiJsApi:
 
     def info(self) -> None:
         query = {
-            'query': """
-{system
-  {info {
+            'query': '''
+{
+system {
+  info {
     currentVersion
     latestVersion
     groupsTotal
@@ -467,7 +533,7 @@ class WikiJsApi:
     usersTotal
     tagsTotal
 }}}
-""",
+            ''',
         }
         data = self.query_wikijs(query)
         _ = xpath(data, 'data/system/info')
@@ -482,25 +548,26 @@ class WikiJsApi:
                 'path': path,
                 'locale': locale,
             },
-            'query': """
-query ($path: String!, $locale: String!)
-  {pages {singleByPath(path: $path, locale: $locale) {
-    id
-    path
-    locale
-    title
-    description
-    contentType
-    isPublished
-    isPrivate
-    privateNS
-    createdAt
-    updatedAt
-    tags {
-      tag
-    }
-  }}}
-""",
+            'query': '''
+query ($path: String!, $locale: String!) {
+  pages {
+    singleByPath(path: $path, locale: $locale) {
+      id
+      path
+      locale
+      title
+      description
+      contentType
+      isPublished
+      isPrivate
+      privateNS
+      createdAt
+      updatedAt
+      tags {
+        tag
+      }
+}}}
+            ''',
         }
         data = self.query_wikijs(query)
         _ = xpath(data, 'data/pages/singleByPath')
@@ -510,26 +577,42 @@ query ($path: String!, $locale: String!)
 
     ##############################################
 
-    def yield_pages(self) -> Iterator[Page]:
+    def list_pages(self, order_by: str = 'PATH', reverse: bool = False, limit: int = 0) -> Iterator[Page]:
         # Query > PageQuery > PageListItem
+        order_by_direction = 'DESC' if reverse else 'ASC'
+        # Fixme: cannot pass PageOrderBy as string ???
         query = {
-            'query': '''
-{pages {
-  list(orderBy: PATH) {
-    id
-    path
-    title
-    locale
-    description
-    contentType
-    isPublished
-    isPrivate
-    privateNS
-    createdAt
-    updatedAt
-    tags
-}}}''',
+            'variables': {
+                'limit': limit,
+                # 'order_By': order_by,
+                # 'orderByDirection': order_by_direction,
+            },
+# query ($limit: Int!, $orderBy: PageOrderBy!, $orderByDirection: PageOrderByDirection!) {
+#     list(limit: $limit, orderBy: $orderBy, orderByDirection: $orderByDirection) {
+            'query': f'''
+query ($limit: Int!) {{
+  pages {{
+    list(
+      limit: $limit,
+      orderBy: {order_by},
+      orderByDirection: {order_by_direction}
+    ) {{
+      id
+      path
+      title
+      locale
+      description
+      contentType
+      isPublished
+      isPrivate
+      privateNS
+      createdAt
+      updatedAt
+      tags
+}}}}}}
+''',
         }
+        # pprint(query)
         data = self.query_wikijs(query)
         # {'data': {'pages': {'list': [{'id': 51,
         #                               'path': 'Vera/a-apporter',
@@ -539,7 +622,7 @@ query ($path: String!, $locale: String!)
 
     ##############################################
 
-    def yield_tree(self, path: str = 'home') -> Iterator[Page]:
+    def tree(self, path: str = 'home') -> Iterator[Page]:
         """List the pages and folders in the parent of the page at `path`.
         When `includeAncestors` is True, the parent directories are also listed.
         """
@@ -551,19 +634,19 @@ query ($path: String!, $locale: String!)
                 'locale': 'fr'
             },
             'query': '''
-query ($path: String!, $locale: String!)
-{pages {
-  tree(path: $path, mode: ALL, locale: $locale, includeAncestors: false) {
-    id
-    path
-    depth
-    title
-    isPrivate
-    isFolder
-    privateNS
-    parent
-    pageId
-    locale
+query ($path: String!, $locale: String!) {
+  pages {
+    tree(path: $path, mode: ALL, locale: $locale, includeAncestors: false) {
+      id
+      path
+      depth
+      title
+      isPrivate
+      isFolder
+      privateNS
+      parent
+      pageId
+      locale
 }}}
 ''',
         }
@@ -593,20 +676,21 @@ query ($path: String!, $locale: String!)
                 'id': page.id,
             },
             'query': '''
-query ($id: Int!)
-{pages {
-  history(id: $id) {
-    trail {
-    versionId
-    versionDate
-    authorId
-    authorName
-    actionType
-    valueBefore
-    valueAfter
-    }
-    total
-}}}''',
+query ($id: Int!) {
+  pages {
+    history(id: $id) {
+      trail {
+        versionId
+        versionDate
+        authorId
+        authorName
+        actionType
+        valueBefore
+        valueAfter
+      }
+      total
+}}}
+            ''',
         }
         data = self.query_wikijs(query)
         history = xpath(data, 'data/pages/history/trail')
@@ -627,15 +711,16 @@ query ($parentFolderId: Int!) {
       id
       name
       slug
-}}}''',
+}}}
+        ''',
         }
         data = self.query_wikijs(query)
         for _ in xpath(data, 'data/assets/folders'):
-            yield AssetFolder(**_)
+            yield AssetFolder(self, **_)
 
     ##############################################
 
-    def list_asset(self, folder_id: int) -> Asset:
+    def list_asset(self, folder_id: int) -> Iterator[Asset]:
         query = {
             'variables': {
                 'folderId': folder_id,
@@ -654,12 +739,13 @@ query ($folderId: Int!, $kind: AssetKind!) {
       metadata
       createdAt
       updatedAt
-}}}''',
+}}}
+        ''',
         # folder: AssetFolder
         # author: Author
         }
         data = self.query_wikijs(query)
-        for _ in  xpath(data, 'data/assets/list'):
+        for _ in xpath(data, 'data/assets/list'):
             yield Asset(**_)
 
     ##############################################
@@ -671,29 +757,30 @@ query ($folderId: Int!, $kind: AssetKind!) {
                 'version_id': page_history.versionId,
             },
             'query': '''
-query ($id: Int!, $version_id: Int!)
-{pages {
-  version(pageId: $id, versionId: $version_id) {
-  action
-  authorId
-  authorName
-  content
-  contentType
-  createdAt
-  versionDate
-  description
-  editor
-  isPrivate
-  isPublished
-  locale
-  pageId
-  path
-  publishEndDate
-  publishStartDate
-  tags
-  title
-  versionId
-}}}''',
+query ($id: Int!, $version_id: Int!) {
+  pages {
+    version(pageId: $id, versionId: $version_id) {
+    action
+    authorId
+    authorName
+    content
+    contentType
+    createdAt
+    versionDate
+    description
+    editor
+    isPrivate
+    isPublished
+    locale
+    pageId
+    path
+    publishEndDate
+    publishStartDate
+    tags
+    title
+    versionId
+}}}
+            ''',
         }
         data = self.query_wikijs(query)
         _ = xpath(data, 'data/pages/version')
@@ -701,7 +788,7 @@ query ($id: Int!, $version_id: Int!)
 
     ##############################################
 
-    def move_page(self, page: Page, path: str, locale: str = 'fr') -> None:
+    def move_page(self, page: Page, path: str, locale: str = 'fr') -> ResponseResult:
         query = {
             'variables': {
                 'id': page.id,
@@ -709,7 +796,7 @@ query ($id: Int!, $version_id: Int!)
                 'destinationLocale': locale,
             },
             # __typename
-            'query': """
+            'query': '''
 mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
   pages {
     move(id: $id, destinationPath: $destinationPath, destinationLocale: $destinationLocale) {
@@ -719,26 +806,18 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
         slug
         message
       }
-    }
-  }
-}
-""",
+}}}
+            ''',
         }
-        pprint(query)
+        # pprint(query)
         data = self.query_wikijs(query)
-        pprint(data)
-        # {'data': {'pages': {'__typename': 'PageMutation',
-        # 'move': {'__typename': 'DefaultResponse',
-        # 'responseResult': {'__typename': 'ResponseStatus',
-        # 'errorCode': 0,
-        # 'message': 'Page has been '
-        # 'moved.',
-        # 'slug': 'ok',
-        # 'succeeded': True}}}}}
+        # pprint(data)
+        _ = xpath(data, 'data/pages/move/responseResult')
+        return ResponseResult(**_)
 
-   ##############################################
+    ##############################################
 
-    def create_page(self, page: Page) -> None:
+    def create_page(self, page: Page) -> ResponseResult:
         variables = {_: getattr(page, _) for _ in (
             'content',
             'description',
@@ -758,8 +837,8 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
         })
         query = {
             'variables': variables,
-            "query": """
- mutation ($content: String!, $description: String!, $editor: String!, $isPrivate: Boolean!, $isPublished: Boolean!, $locale: String!, $path: String!, $publishEndDate: Date, $publishStartDate: Date, $scriptCss: String, $scriptJs: String, $tags: [String]!, $title: String!) {
+            "query": '''
+mutation ($content: String!, $description: String!, $editor: String!, $isPrivate: Boolean!, $isPublished: Boolean!, $locale: String!, $path: String!, $publishEndDate: Date, $publishStartDate: Date, $scriptCss: String, $scriptJs: String, $tags: [String]!, $title: String!) {
   pages {
     create(content: $content, description: $description, editor: $editor, isPrivate: $isPrivate, isPublished: $isPublished, locale: $locale, path: $path, publishEndDate: $publishEndDate, publishStartDate: $publishStartDate, scriptCss: $scriptCss, scriptJs: $scriptJs, tags: $tags, title: $title) {
       responseResult {
@@ -772,10 +851,8 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
         id
         updatedAt
       }
-    }
-  }
-}
-""",
+}}}
+            ''',
         }
         # pprint(query)
         data = self.query_wikijs(query)
@@ -785,7 +862,8 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
 
     ##############################################
 
-    def update_page(self, page: Page, content: str) -> None:
+    def update_page(self, page: Page, content: str) -> ResponseResult:
+        # Fixme: checkConflicts
         # "variables":{"id":96,"checkoutDate":"2024-11-07T02:04:57.106Z"}
         # "query ($id: Int!, $checkoutDate: Date!) {\n  pages {\n    checkConflicts(id: $id, checkoutDate: $checkoutDate)\n    __typename\n  }\n}\n"}]'
         query = {
@@ -805,8 +883,8 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
                 'tags': page.tags,
                 'title': page.title,
             },
-            "query": """
- mutation ($id: Int!, $content: String, $description: String, $editor: String, $isPrivate: Boolean, $isPublished: Boolean, $locale: String, $path: String, $publishEndDate: Date, $publishStartDate: Date, $scriptCss: String, $scriptJs: String, $tags: [String], $title: String) {
+            "query": '''
+mutation ($id: Int!, $content: String, $description: String, $editor: String, $isPrivate: Boolean, $isPublished: Boolean, $locale: String, $path: String, $publishEndDate: Date, $publishStartDate: Date, $scriptCss: String, $scriptJs: String, $tags: [String], $title: String) {
   pages {
     update(id: $id, content: $content, description: $description, editor: $editor, isPrivate: $isPrivate, isPublished: $isPublished, locale: $locale, path: $path, publishEndDate: $publishEndDate, publishStartDate: $publishStartDate, scriptCss: $scriptCss, scriptJs: $scriptJs, tags: $tags, title: $title) {
       responseResult {
@@ -818,29 +896,23 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
       page {
         updatedAt
       }
-    }
-  }
-}
-""",
+}}}
+            ''',
         }
-        pprint(query)
+        # pprint(query)
         data = self.query_wikijs(query)
-        pprint(data)
-        # {'data': {'pages': {'update': {'page': {'updatedAt': '2024-11-08T02:20:13.890Z'},
-        # 'responseResult': {'errorCode': 0,
-        # 'message': 'Page has been '
-        # 'updated.',
-        # 'slug': 'ok',
-        # 'succeeded': True}}}}}
+        # pprint(data)
+        _ = xpath(data, 'data/pages/update/responseResult')
+        return ResponseResult(**_)
 
     ##############################################
 
     def history(self, progress_callback, preload_version: bool = True) -> list[PageHistory]:
-        # history = [_ for page in self.yield_pages() for _ in page.history]
+        # history = [_ for page in self.list_pages() for _ in page.history]
         history = []
         P_STEP = 10
         next_p = P_STEP
-        for i, page in enumerate(self.yield_pages()):
+        for i, page in enumerate(self.list_pages()):
             p = 100 * i / self._number_of_pages
             if p > next_p:
                 progress_callback(int(p))
@@ -854,3 +926,100 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
         # for _ in history:
         #     print(f'{_.versionId} {_.date} {_.page.id} {_.page.path} {_.actionType}')
         return history
+
+    ##############################################
+
+    def search(self, query: str) -> PageSearchResponse:
+        query = {
+            'variables': {
+                'query': query,
+            },
+            'query': '''
+query ($query: String!) {
+  pages {
+    search(query: $query) {
+      results {
+        id
+        title
+        description
+        path
+        locale
+      }
+      suggestions
+      totalHits
+}}}
+        ''',
+        }
+        data = self.query_wikijs(query)
+        results = [PageSearchResult(**_) for _ in xpath(data, 'data/pages/search/results')]
+        _ = {
+            key: value
+            for key, value in xpath(data, 'data/pages/search').items()
+            if key != 'results'
+        }
+        return PageSearchResponse(
+            results=results,
+            **_,
+        )
+
+    ##############################################
+
+    def tags(self) -> Iterator[Tag]:
+        query = {
+            'query': '''
+{
+  pages {
+    tags {
+      id
+      tag
+      title
+      createdAt
+      updatedAt
+}}}
+''',
+        }
+        data = self.query_wikijs(query)
+        for _ in xpath(data, 'data/pages/tags'):
+            yield Tag(**_)
+
+    ##############################################
+
+    def search_tags(self, query: str) -> list[str]:
+        query = {
+            'variables': {
+                'query': query,
+            },
+            'query': '''
+query ($query: String!) {
+  pages {
+    searchTags(query: $query)
+}}
+''',
+        }
+        data = self.query_wikijs(query)
+        return xpath(data, 'data/pages/searchTags')
+
+    ##############################################
+
+    def links(self) -> Iterator[PageLinkItem]:
+        query = {
+            'variables': {
+                'locale': 'fr',
+            },
+            'query': '''
+query ($locale: String!) {
+  pages {
+    links(locale: $locale) {
+      id
+      path
+      title
+      links
+}}}
+''',
+        }
+        data = self.query_wikijs(query)
+        # pprint(data)
+        for _ in xpath(data, 'data/pages/links'):
+            link = PageLinkItem(**_)
+            if link.links:
+                yield link
