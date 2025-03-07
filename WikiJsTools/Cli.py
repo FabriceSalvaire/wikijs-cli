@@ -6,6 +6,7 @@ __all__ = ['Cli']
 
 from datetime import datetime
 from pprint import pprint
+import inspect
 import json
 # import logging
 import os
@@ -70,8 +71,9 @@ class Cli:
         ]
         self.COMMANDS.sort()
         self.COMPLETER = WordCompleter(self.COMMANDS)
+        self._current_path = None
         self._asset_folders = None
-        self._asset_folder = None
+        self._current_asset_folder = None
 
     ##############################################
 
@@ -170,36 +172,61 @@ class Cli:
             "<red>Enter</red>: <blue>command argument</blue>",
             "    or <blue>command1 argument; command2 argument; ...</blue>",
             "<red>Commands are</red>: " + ', '.join([f"<blue>{_}</blue>" for _ in self.COMMANDS]),
-            "  <blue>dump</blue> <green>@page_url@ [output]</green>: dump the page",
-            "  <blue>list</blue>: list all the pages",
-            "  <blue>move</blue> <green>@page_url@ @new_page_url@</green>: move a page",
-            "  <blue>update</blue> <green>@page_url@ input</green>: update the page",
-            "  <blue>create</blue> <green>input</green>: create a page",
-            "  <blue>template</blue> <green>output</green>: create a page template",
-            "  <blue>check</blue>: check pages",
-            "  <blue>asset</blue>: list all the assets",
-            "  <blue>sync</blue>: sync wiki on disk",
-            "  <blue>git_sync</blue>: sync wiki on a Git repo",
             "<red>Exit</red> using command <blue>quit</blue> or <blue>Ctrl+d</blue>"
         ):
             self.print(_)
 
+            # "  <blue>dump</blue> <green>@page_url@ [output]</green>: dump the page",
+            # "  <blue>list</blue>: list all the pages",
+            # "  <blue>move</blue> <green>@page_url@ @new_page_url@</green>: move a page",
+            # "  <blue>update</blue> <green>@page_url@ input</green>: update the page",
+            # "  <blue>create</blue> <green>input</green>: create a page",
+            # "  <blue>template</blue> <green>output</green>: create a page template",
+            # "  <blue>check</blue>: check pages",
+            # "  <blue>asset</blue>: list all the assets",
+            # "  <blue>sync</blue>: sync wiki on disk",
+            # "  <blue>git_sync</blue>: sync wiki on a Git repo",
+
     ##############################################
 
-    def list(self) -> None:
+    def help(self, command: str) -> None:
+        func = getattr(self, command)
+        # help(func)
+        self.print(f'<blue>{func.__doc__}</blue>')
+        signature = inspect.signature(func)
+        for _ in signature.parameters.values():
+            self.print(f'  <blue>{_.name}</blue>: <green>{_.annotation.__name__}</green>')
+
+    ##############################################
+
+    def list(self, complete: bool = False) -> None:
+        """List the pages"""
+        complete = self.to_bool(complete)
         for page in self._api.list_pages():
-            page.complete()
-            self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> {len(page.content):5} @{page.locale} {page.id:3}")
+            if complete:
+                page.complete()
+                self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> {len(page.content):5} @{page.locale} {page.id:3}")
+            else:
+                self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> @{page.locale} {page.id:3}")
+
+    ##############################################
+
+    def listp(self, path: str) -> None:
+        for page in self._api.list_pages():
+            if path in page.path.lower():
+                self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> @{page.locale} {page.id:3}")
 
     ##############################################
 
     def last(self) -> None:
+        """List the last updated pages"""
         for page in self._api.list_pages(order_by='UPDATED', reverse=True, limit=10):
             self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue>{LINESEP}  {page.updated_at}   @{page.locale}   {page.id:3}")
 
     ##############################################
 
     def tree(self, path: str) -> None:
+        """Show page tree"""
         pages = list(self._api.tree(path))
         pages.sort(key=lambda _: _.path)
         for page in pages:
@@ -210,6 +237,7 @@ class Cli:
     ##############################################
 
     def dump(self, path: str, output: str = None) -> None:
+        """dump a page"""
         page = self._api.page(path)
         page.complete()
         _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
@@ -229,13 +257,34 @@ class Cli:
 
     ##############################################
 
+    def cwd(self) -> None:
+        """Show current working directry"""
+        self.print(f"<blue>Current path</blue> <green>{self._current_path}</green>")
+        self.print(f"<blue>Current asset path</blue> <green>{self._current_asset_folder}</green>")
+
+    ##############################################
+
+    def cd(self, path: str) -> None:
+        """Change the current path"""
+        if path.endswith('/'):
+            path = path[:-1]
+        self._current_path = path
+        self.print(f"<red>moved to</red> <blue>{path}</blue>")
+
+    ##############################################
+
     def template(self, dst: str, path: str, locale: str = 'fr', content_type: str = 'markdown') -> None:
+        """Write a page template"""
+        if self._current_path:
+            path = f'{self._current_path}{path}'
+            self.print(f"<red>Path is</red> <blue>{path}</blue>")
         if Page.template(dst, locale, path, content_type) is None:
             self.print(f"<red>Error: file exists</red>")
 
     ##############################################
 
     def create(self, input: str) -> None:
+        """Create a new page"""
         page = Page.read(input, self._api)
         response = self._api.create_page(page)
         self.print(f"<red>{response.message}</red>")
@@ -243,6 +292,7 @@ class Cli:
     ##############################################
 
     def update(self, path: str, input: str = None) -> None:
+        """Update a page"""
         page = self._api.page(path)
         page.complete()
         _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
@@ -259,6 +309,7 @@ class Cli:
     ##############################################
 
     def move(self, old_path: str, new_path: str, dryrun: bool = False) -> None:
+        """Move the pages that match the path pattern"""
         dryrun = self.to_bool(dryrun)
         self.print(f"  Move: <green>{old_path}</green> <red>-></red> <blue>{new_path}</blue>")
         for page in self._api.list_pages():
@@ -275,6 +326,7 @@ class Cli:
     ##############################################
 
     def asset(self, show_files: bool = True, show_folder_path: bool = False) -> None:
+        """List the assets"""
         show_files = self.to_bool(show_files)
         # Build asset folder tree
         self._asset_folders = {
@@ -303,10 +355,11 @@ class Cli:
     ##############################################
 
     def cd_asset(self, path: str) -> None:
+        """Change the current asset folder"""
         if self._asset_folders is None:
             self.asset(show_files=False, show_folder_path=True)
         try:
-            self._asset_folder = self._asset_folders[path]
+            self._current_asset_folder = self._asset_folders[path]
             self.print(f"<red>moved to</red> <blue>{path}</blue>")
         except KeyError:
             self.print(f"<red>Error:</red> <blue>{path}</blue> <red>not found</red>")
@@ -314,11 +367,12 @@ class Cli:
     ##############################################
 
     def upload(self, path: Path | str, name: str = None) -> None:
-        if self._asset_folder is not None:
-            self._asset_folder.upload(path, name)
-            assets = list(self._asset_folder.list())
+        """Upload an asset"""
+        if self._current_asset_folder is not None:
+            self._current_asset_folder.upload(path, name)
+            assets = list(self._current_asset_folder.list())
             assets.sort(key=lambda _: _.updated_at, reverse=True)
-            self.print(f'<blue>{self._asset_folder.path}</blue>')
+            self.print(f'<blue>{self._current_asset_folder.path}</blue>')
             for asset in assets:
                 self.print(f'- <blue>{asset.filename}</blue>   {asset.updated_at}')
         else:
@@ -327,14 +381,18 @@ class Cli:
     ##############################################
 
     def search(self, query: str) -> None:
+        """Search page"""
         response = self._api.search(query)
-        self.print(f'Suggestions: <blue>{response.suggestions}</blue>')
+        if response.suggestions:
+            _ = ', '.join(response.suggestions)
+            self.print(f'Suggestions: <blue>{_}</blue>')
         for _ in response.results:
-            self.print(f'- <blue>{_.path:60}</blue> <green>{_.title}</green>')
+            self.print(f'<blue>{_.path:60}</blue> <green>{_.title}</green>')
 
     ##############################################
 
     def sync(self, path: Path = None) -> None:
+        """Sync on disk"""
         if path is None:
             path = Path('.', 'sync')
         path.mkdir(exist_ok=True)
@@ -352,6 +410,7 @@ class Cli:
     ##############################################
 
     def git_sync(self, path: Path = None) -> None:
+        """Sync Git repo"""
         # Protection
         if Path.cwd().joinpath('.git').exists():
             print(f"Current path is a git repo. Exit")
@@ -500,6 +559,7 @@ class Cli:
     ##############################################
 
     def check(self) -> None:
+        """Check pages"""
         pages = list(self._api.list_pages())
         page_paths = [_.path for _ in pages]
         for page in pages:
@@ -544,18 +604,21 @@ class Cli:
     ##############################################
 
     def tags(self) -> None:
+        """List the tags"""
         for _ in self._api.tags():
             self.print(f'<blue>{_.tag:30}</blue> <green>{_.title}</green>')
 
     ##############################################
 
     def search_tags(self, query: str) -> None:
+        """Search the tags"""
         for _ in self._api.search_tags(query):
             self.print(f'<blue>{_}</blue>')
 
     ##############################################
 
     def links(self) -> None:
+        """List tha page links"""
         pages = list(self._api.links())
         pages.sort(key=lambda _: _.path)
         for page in pages:
