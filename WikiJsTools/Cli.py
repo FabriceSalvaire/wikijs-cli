@@ -6,6 +6,7 @@ __all__ = ['Cli']
 
 from datetime import datetime
 from pprint import pprint
+from typing import Iterable
 import difflib
 import html
 import inspect
@@ -22,18 +23,116 @@ from pathlib import Path
 # Python Prompt Toolkit](https://python-prompt-toolkit.readthedocs.io/en/master/)
 from prompt_toolkit import PromptSession, HTML
 from prompt_toolkit import print_formatted_text, shortcuts
-from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.completion import WordCompleter, Completer, Completion, CompleteEvent
+from prompt_toolkit.document import Document
 # from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 
-from .WikiJsApi import Page, WikiJsApi, AssetFolder
+from .WikiJsApi import Page, WikiJsApi, AssetFolder, Node
 
 ####################################################################################################
 
 # _module_logger = logging.getLogger('')
 
 LINESEP = os.linesep
+
+####################################################################################################
+
+class CustomCompleter(Completer):
+
+    """
+    Simple autocompletion on a list of words.
+
+    :param words: List of words or callable that returns a list of words.
+    :param ignore_case: If True, case-insensitive completion.
+    :param meta_dict: Optional dict mapping words to their meta-text. (This
+        should map strings to strings or formatted text.)
+    :param WORD: When True, use WORD characters.
+    :param sentence: When True, don't complete by comparing the word before the
+        cursor, but by comparing all the text before the cursor. In this case,
+        the list of words is just a list of strings, where each string can
+        contain spaces. (Can not be used together with the WORD option.)
+    :param match_middle: When True, match not only the start, but also in the
+                         middle of the word.
+    :param pattern: Optional compiled regex for finding the word before
+        the cursor to complete. When given, use this regex pattern instead of
+        default one (see document._FIND_WORD_RE)
+    """
+
+    ##############################################
+
+    def __init__(self, cli, commands: list[str]) -> Node:
+        self._cli = cli
+        self._commands = commands
+
+        self.ignore_case = True
+        # self.display_dict = display_dict or {}
+        # self.meta_dict = meta_dict or {}
+        self.WORD = False
+        self.sentence = False
+        self.match_middle = False
+        self.pattern = None
+
+    ##############################################
+
+    # cf. prompt_toolkit/completion/word_completer.py
+    def _get_completions(
+            self,
+            document: Document,
+            complete_event: CompleteEvent,
+            words: list[str],
+    ) -> Iterable[Completion]:
+        # Get list of words.
+        # if callable(words):
+        #     words = words()
+
+        # Get word/text before cursor.
+        # if self.sentence:
+        #     word_before_cursor = document.text_before_cursor
+        # else:
+        word_before_cursor = document.get_word_before_cursor(
+            WORD=self.WORD, pattern=self.pattern
+        )
+
+        if self.ignore_case:
+            word_before_cursor = word_before_cursor.lower()
+
+        def word_matches(word: str) -> bool:
+            """True when the word before the cursor matches."""
+            if self.ignore_case:
+                word = word.lower()
+
+            if self.match_middle:
+                return word_before_cursor in word
+            else:
+                return word.startswith(word_before_cursor)
+
+        for _ in words:
+            if word_matches(_):
+                # display = self.display_dict.get(_, _)
+                # display_meta = self.meta_dict.get(_, "")
+                yield Completion(
+                    text=_,
+                    start_position=-len(word_before_cursor),
+                    # display=display,
+                    # display_meta=display_meta,
+                )
+
+    ##############################################
+
+    def get_completions(
+            self,
+            document: Document,
+            complete_event: CompleteEvent,
+    ) -> Iterable[Completion]:
+        line = document.current_line.lstrip()
+        cwd = self._cli._current_path
+        if line.startswith('cd ') and cwd:
+            words = cwd.folder_names
+        else:
+            words = self._commands
+        yield from self._get_completions(document, complete_event, words)
 
 ####################################################################################################
 
@@ -72,7 +171,9 @@ class Cli:
             if not (_.startswith('_') or _[0].isupper() or _ in ('cli', 'run', 'print'))
         ]
         self.COMMANDS.sort()
-        self.COMPLETER = WordCompleter(self.COMMANDS)
+        # self._completer = WordCompleter(self.COMMANDS)
+        self._completer = CustomCompleter(self, self.COMMANDS)
+        self._page_tree = None
         self._current_path = None
         self._asset_folders = None
         self._current_asset_folder = None
@@ -130,7 +231,7 @@ class Cli:
 
         history = FileHistory(self.CLI_HISTORY)
         session = PromptSession(
-            completer=self.COMPLETER,
+            completer=self._completer,
             history=history,
         )
         self.usage()
@@ -268,17 +369,50 @@ class Cli:
 
     def cwd(self) -> None:
         """Show current working directry"""
-        self.print(f"<blue>Current path</blue> <green>{self._current_path}</green>")
+        self.print(f"<blue>Current path</blue> <green>{self._current_path.path}</green>")
         self.print(f"<blue>Current asset path</blue> <green>{self._current_asset_folder}</green>")
+
+    ##############################################
+
+    def reset(self) -> None:
+        if self._page_tree is None:
+            self._page_tree = self._api.build_page_tree()
+            self._current_path = self._page_tree
+        # reset current_path ?
+
+    ##############################################
+
+    def dir(self) -> None:
+        self.reset()
+        self.print(f"<red>CWD</red> <blue>{self._current_path.path}</blue>")
+        # for _ in self._current_path.folder_childs:
+        #     self.print(f"  {_.name}")
+        for _ in self._current_path.childs:
+            if _.is_folder:
+                self.print(f"  <green>{_.name} /</green>")
+            else:
+                self.print(f"  <blue>{_.name}</blue>")
 
     ##############################################
 
     def cd(self, path: str) -> None:
         """Change the current path"""
-        if path.endswith('/'):
-            path = path[:-1]
-        self._current_path = path
-        self.print(f"<red>moved to</red> <blue>{path}</blue>")
+        self.reset()
+        # if path.endswith('/'):
+        #     path = path[:-1]
+        # self._current_path = path
+        # self.print(f"<red>moved to</red> <blue>{path}</blue>")
+        if path == '..':
+            if not self._current_path.is_root:
+                self._current_path = self._current_path.parent
+        elif path.startswith('/') or '/' in path:
+            raise NotImplementedError
+        else:
+            _ = self._current_path[path]
+            if _.is_leaf:
+                self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
+            self._current_path = _
+        self.print(f"<red>moved to</red> <blue>{self._current_path.path}</blue>")
 
     ##############################################
 
@@ -297,7 +431,7 @@ class Cli:
         if self._current_path:
             if path is None:
                 path = dst.stem
-            path = f'{self._current_path}/{path}'
+            path = self._current_path.join(path)
             self.print(f"<red>Path is</red> <blue>{path}</blue>")
         elif path is None:
             self.print("<red>path is required</red>")

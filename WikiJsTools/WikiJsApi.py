@@ -18,6 +18,101 @@ import requests
 
 ####################################################################################################
 
+class Node:
+
+    ##############################################
+
+    def __init__(self, name: str = '') -> None:
+        self._name = str(name)
+        self._parent = None
+        self._childs = {}
+
+    ##############################################
+
+    def __str__(self) -> str:
+        return self._name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def path(self) -> str:
+        if self.is_root:
+            return '/'
+        elif self.parent.is_root:
+            return f'/{self._name}'
+        else:
+            return f'{self.parent.path}/{self._name}'
+
+    @property
+    def is_root(self) -> bool:
+        return self._parent is None
+
+    @property
+    def is_folder(self) -> bool:
+        return self._childs
+
+    @property
+    def is_leaf(self) -> bool:
+        return not self._childs
+
+    @property
+    def parent(self) -> 'Node':
+        return self._parent
+
+    @parent.setter
+    def parent(self, node: 'Node') -> None:
+        self._parent = node
+
+    @property
+    def childs(self) -> Iterator['Node']:
+        childs = list(self._childs.values())
+        childs.sort(key=lambda _: _._name)
+        return iter(childs)
+
+    @property
+    def folder_childs(self) -> Iterator['Node']:
+        for _ in self.childs:
+            if _.is_folder:
+                yield _
+
+    @property
+    def child_names(self) -> list[str]:
+        return sorted(self._childs.keys())
+
+    @property
+    def folder_names(self) -> list[str]:
+        return [_.name for _ in self.folder_childs]
+
+    ##############################################
+
+    def add_child(self, child: 'Node') -> None:
+        if child.name not in self._childs:
+            self._childs[child.name] = child
+            child.parent = self
+
+    ##############################################
+
+    def __getitem__(self, name: str) -> 'Node':
+        return self._childs[name]
+
+    ##############################################
+
+    def find(self, path: list[str]) -> 'Node':
+        if path:
+            _ = path.pop()
+            return self[_].find(path)
+        else:
+            return self
+
+    ##############################################
+
+    def join(self, path: str) -> 'str':
+        return f'{self.path}/{path}'
+
+####################################################################################################
+
 @dataclass
 class ResponseResult:
     succeeded: bool
@@ -57,6 +152,10 @@ class PageTreeItem:
 class BasePage:
 
     RULE = '-'*50
+
+    @property
+    def split_path(self) -> list[str]:
+        return self.path.split('/')
 
     ##############################################
 
@@ -671,6 +770,25 @@ query ($path: String!, $locale: String!) {
         data = self.query_wikijs(query)
         for _ in xpath(data, 'data/pages/tree'):
             yield PageTreeItem(api=self, **_)
+
+    ##############################################
+
+    def build_page_tree(self) -> Node:
+        root = Node()
+        for page in self.list_pages():
+            # print('-'*10)
+            # print(page.path)
+            path = page.split_path
+            prev = root
+            for _ in path:
+                try:
+                    node = prev[_]
+                except KeyError:
+                    node = Node(_)
+                    prev.add_child(node)
+                # print(f'{prev} // {node}')
+                prev = node
+        return root
 
     ##############################################
 
