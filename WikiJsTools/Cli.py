@@ -7,6 +7,7 @@ __all__ = ['Cli']
 from datetime import datetime
 from pprint import pprint
 import difflib
+import html
 import inspect
 import json
 # import logging
@@ -343,9 +344,26 @@ class Cli:
         file_page = Page.read(input, self._api)
         wiki_page = file_page.reload()
         wiki_page.complete()
-        self.print(f"<red>Wiki:</red> <blue>wiki_page.updated_at</blue>")
-        self.print(f"<red>File:</red> <blue>file_page.updated_at</blue>")
-        print(difflib.unified_diff(wiki_page.content, file_page.content))
+        self.print(f"<red>Wiki:</red> <blue>{wiki_page.updated_at}</blue>")
+        self.print(f"<red>File:</red> <blue>{file_page.updated_at}</blue>")
+        for _ in difflib.unified_diff(
+                wiki_page.content.splitlines(),
+                file_page.content.splitlines(),
+                fromfile='wiki',
+                tofile='disk',
+                n=3,
+                lineterm='',
+        ):
+            _ = html.escape(_)
+            if _.startswith('---') or _.startswith('+++'):
+                _ = f'<green>{_}</green>'
+            elif _.startswith('@@'):
+                _ = f'<blue>{_}</blue>'
+            elif _.startswith('-'):
+                _ = f'<red>-</red>{_[1:]}'
+            elif _.startswith('+'):
+                _ = f'<green>+</green>{_[1:]}'
+            self.print(_)
 
     ##############################################
 

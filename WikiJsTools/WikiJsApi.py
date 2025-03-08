@@ -277,7 +277,10 @@ class Page(BasePage):
 
     @property
     def updated_at(self) -> datetime:
-        return datetime.fromisoformat(self.updatedAt)
+        if self.updatedAt:
+            return datetime.fromisoformat(self.updatedAt)
+        else:
+            return None
 
     @property
     def version_id(self) -> int:
@@ -294,7 +297,7 @@ class Page(BasePage):
     ##############################################
 
     def reload(self) -> 'Page':
-        return self._api.page(self.path, self.locale)
+        return self.api.page(self.path, self.locale)
 
 ####################################################################################################
 
