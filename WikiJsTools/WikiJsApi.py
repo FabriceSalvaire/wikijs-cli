@@ -66,29 +66,43 @@ class BasePage:
 
     ##############################################
 
+    @staticmethod
+    def extension_for(content_type: str = 'markdown'):
+        match content_type:
+            case 'markdown':
+                return '.md'
+            case _:
+                return '.txt'
+
+    ##############################################
+
     @classmethod
-    def file_path2(
+    def file_path_impl(
             cls,
             dst: Path | str,
             locale: str,
             path: str = None,
             content_type: str = 'markdown',
     ) -> Path:
-        match content_type:
-            case 'markdown':
-                extension = '.md'
-            case _:
-                extension = '.txt'
         _ = path.split('/')
-        _[-1] += extension
+        _[-1] += cls.extension_for(content_type)
         return Path(dst).joinpath(locale, *_)
 
     ##############################################
 
-    def file_path(self, dst: Path | str, path: str = None, content_type: str = 'markdown') -> Path:
+    def file_path(self, dst: Path | str, path: str = None) -> Path:
+        # Note: path is used to move page version
         if path is None:
             path = self.path
-        self.file_path2(dst, self.locale, path, self.contentType)
+        self.file_path_impl(dst, self.locale, path, self.contentType)
+
+    ##############################################
+
+    def add_extension(self, dst: str) -> Path:
+        extension = self.extension_for(self.contentType)
+        if not dst.endswith(extension):
+            dst += extension
+        return Path(dst)
 
     ##############################################
 
@@ -129,7 +143,7 @@ class BasePage:
 
     ##############################################
 
-    def write(self, dst: Path | str, check_exists: bool = True) -> Path:
+    def sync(self, dst: Path | str, check_exists: bool = True) -> Path:
         file_path = self.file_path(dst)
 
         if check_exists:
@@ -147,6 +161,11 @@ class BasePage:
                 # print(f'{self.path} | {old_date} vs {new_date}')
                 if file_date == self.updated_at:
                     return
+
+    ##############################################
+
+    def write(self, dst: Path | str) -> Path:
+        path = Path(dst)
 
         data = ''
         # data += self.RULE + os.linesep
@@ -176,9 +195,9 @@ class BasePage:
         data += self.RULE + os.linesep
         data += self.content.rstrip()
         # print(f'{file_path}')
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(data, encoding='utf8')
-        return file_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data, encoding='utf8')
+        return path
 
     ##############################################
 
@@ -271,6 +290,11 @@ class Page(BasePage):
 
     def move(self, *args, **kwargs) -> 'ResponseResult':
         return self.api.move_page(self, *args, **kwargs)
+
+    ##############################################
+
+    def reload(self) -> 'Page':
+        return self._api.page(self.path, self.locale)
 
 ####################################################################################################
 
@@ -562,7 +586,7 @@ query ($path: String!, $locale: String!) {
         data = self.query_wikijs(query)
         _ = xpath(data, 'data/pages/singleByPath')
         _['tags'] = [_['tag'] for _ in _['tags']]
-        pprint(_)
+        # pprint(_)
         return Page(api=self, **_)
 
     ##############################################
@@ -623,6 +647,7 @@ query ($limit: Int!) {{
                 # 'parent': 3,
                 'locale': 'fr'
             },
+            # parent: Int
             'query': '''
 query ($path: String!, $locale: String!) {
   pages {
@@ -852,14 +877,14 @@ mutation ($content: String!, $description: String!, $editor: String!, $isPrivate
 
     ##############################################
 
-    def update_page(self, page: Page, content: str) -> ResponseResult:
+    def update_page(self, page: Page) -> ResponseResult:
         # Fixme: checkConflicts
         # "variables":{"id":96,"checkoutDate":"2024-11-07T02:04:57.106Z"}
         # "query ($id: Int!, $checkoutDate: Date!) {\n  pages {\n    checkConflicts(id: $id, checkoutDate: $checkoutDate)\n    __typename\n  }\n}\n"}]'
         query = {
             'variables': {
                 'id': page.id,
-                'content': content,
+                'content': page.content,
                 'description': '',
                 'editor': 'markdown',
                 'isPrivate': False,

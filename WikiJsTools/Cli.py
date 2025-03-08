@@ -6,6 +6,7 @@ __all__ = ['Cli']
 
 from datetime import datetime
 from pprint import pprint
+import difflib
 import inspect
 import json
 # import logging
@@ -67,7 +68,7 @@ class Cli:
         self.COMMANDS = [
             _
             for _ in dir(self)
-            if not (_.startswith('_') or _[0].isupper() or _ in ('cli', 'run'))
+            if not (_.startswith('_') or _[0].isupper() or _ in ('cli', 'run', 'print'))
         ]
         self.COMMANDS.sort()
         self.COMPLETER = WordCompleter(self.COMMANDS)
@@ -78,7 +79,7 @@ class Cli:
     ##############################################
 
     @staticmethod
-    def to_bool(value: str) -> bool:
+    def _to_bool(value: str) -> bool:
         if isinstance(value, bool):
             return value
         match str(value).lower():
@@ -154,9 +155,11 @@ class Cli:
 
     ##############################################
 
-    def print(self, message: str) -> None:
+    def print(self, message: str = '') -> None:
+        if message:
+            message = HTML(message)
         print_formatted_text(
-            HTML(message),
+            message,
             style=self.STYLE,
         )
 
@@ -172,6 +175,9 @@ class Cli:
             "<red>Enter</red>: <blue>command argument</blue>",
             "    or <blue>command1 argument; command2 argument; ...</blue>",
             "<red>Commands are</red>: " + ', '.join([f"<blue>{_}</blue>" for _ in self.COMMANDS]),
+            "use <blue>help</blue> <green>command</green> to get help",
+            "use <green>tab</green> key to complete",
+            "use <green>up/down</green> key to navigate history",
             "<red>Exit</red> using command <blue>quit</blue> or <blue>Ctrl+d</blue>"
         ):
             self.print(_)
@@ -201,7 +207,7 @@ class Cli:
 
     def list(self, complete: bool = False) -> None:
         """List the pages"""
-        complete = self.to_bool(complete)
+        complete = self._to_bool(complete)
         for page in self._api.list_pages():
             if complete:
                 page.complete()
@@ -238,17 +244,19 @@ class Cli:
 
     def dump(self, path: str, output: str = None) -> None:
         """dump a page"""
-        page = self._api.page(path)
+        page = self._api.page(path)   # locale=
         page.complete()
         _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
         _ += f"  <blue>{page.title}</blue>{LINESEP}"
         _ += f"  {page.id}{LINESEP}"
         self.print(_)
         if output:
-            output = Path(output)
-            if not output.parent.exists():
-                raise NameError(f"path doesn't exists {output.parent}")
-            output.write_text(page.content, encoding='utf8')
+            output = page.add_extension(output)
+            if output.exists():
+                self.print(f"<red>File exists</red> {output}")
+            else:
+                self.print(f"<blue>Write</blue> {output}")
+                page.write(output)
         else:
             rule = '\u2500' * 100
             print(rule)
@@ -273,44 +281,89 @@ class Cli:
 
     ##############################################
 
-    def template(self, dst: str, path: str, locale: str = 'fr', content_type: str = 'markdown') -> None:
+    @classmethod
+    def _fix_extension(self, filename: str, content_type: str = 'markdown') -> Path:
+        extension = Page.extension_for(content_type)
+        if not filename.endswith(extension):
+            filename += extension
+        return Path(filename)
+
+    ##############################################
+
+    def template(self, dst: str, path: str = None, locale: str = 'fr', content_type: str = 'markdown') -> None:
         """Write a page template"""
+        dst = self._fix_extension(dst)
         if self._current_path:
-            path = f'{self._current_path}{path}'
+            if path is None:
+                path = dst.stem
+            path = f'{self._current_path}/{path}'
             self.print(f"<red>Path is</red> <blue>{path}</blue>")
+        elif path is None:
+            self.print("<red>path is required</red>")
+
         if Page.template(dst, locale, path, content_type) is None:
             self.print(f"<red>Error: file exists</red>")
+        else:
+            self.print(f"<red>Wrote</red>  <blue>{dst}</blue>")
+
+    ##############################################
+
+    def emc(self, dst: str) -> None:
+        dst = self._fix_extension(dst)
+        subprocess.Popen(('/usr/bin/emacsclient', dst), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    ##############################################
+
+    def open(self, path: str, locale: str = 'fr') -> None:
+        if self._current_path:
+            path = f'{self._current_path}/{path}'
+        url = f'{self._api.api_url}/{locale}/{path}'
+        self.print(f"<red>Open</red>  <blue>{url}</blue>")
+        subprocess.Popen(('/usr/bin/xdg-open', url), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     ##############################################
 
     def create(self, input: str) -> None:
         """Create a new page"""
+        input = self._fix_extension(input)
         page = Page.read(input, self._api)
+        if page.title is None:
+            self.print(f"<red>Error: missing title</red>")
+            return
+        _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
+        _ += f"  <blue>{page.title}</blue>{LINESEP}"
+        self.print(_)
         response = self._api.create_page(page)
         self.print(f"<red>{response.message}</red>")
 
     ##############################################
 
-    def update(self, path: str, input: str = None) -> None:
+    def diff(self, input: str = None) -> None:
+        """Diff a page"""
+        file_page = Page.read(input, self._api)
+        wiki_page = file_page.reload()
+        wiki_page.complete()
+        self.print(f"<red>Wiki:</red> <blue>wiki_page.updated_at</blue>")
+        self.print(f"<red>File:</red> <blue>file_page.updated_at</blue>")
+        print(difflib.unified_diff(wiki_page.content, file_page.content))
+
+    ##############################################
+
+    def update(self, input: str = None) -> None:
         """Update a page"""
-        page = self._api.page(path)
-        page.complete()
+        page = Page.read(input, self._api)
         _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
         _ += f"  <blue>{page.title}</blue>{LINESEP}"
         _ += f"  {page.id}{LINESEP}"
         self.print(_)
-        content = input.readtext(encoding='utf8')
-        rule = '\u2500' * 100
-        print(rule)
-        print(page.content)
-        print(rule)
-        page.update(content)
+        response = page.update()
+        self.print(f"<red>{response.message}</red>")
 
     ##############################################
 
     def move(self, old_path: str, new_path: str, dryrun: bool = False) -> None:
         """Move the pages that match the path pattern"""
-        dryrun = self.to_bool(dryrun)
+        dryrun = self._to_bool(dryrun)
         self.print(f"  Move: <green>{old_path}</green> <red>-></red> <blue>{new_path}</blue>")
         for page in self._api.list_pages():
             # for _ in ('portail',):
@@ -327,7 +380,7 @@ class Cli:
 
     def asset(self, show_files: bool = True, show_folder_path: bool = False) -> None:
         """List the assets"""
-        show_files = self.to_bool(show_files)
+        show_files = self._to_bool(show_files)
         # Build asset folder tree
         self._asset_folders = {
             '/': AssetFolder(self, id=0, name='', slug='')
@@ -432,7 +485,7 @@ class Cli:
         json_versions = []
         last_version_date = None
         if created:
-            subprocess.check_call((self.GIT, 'init'))
+            subprocess.run((self.GIT, 'init'), check=True)
         else:
             with open(self.HISTORY_JSON, 'r') as fh:
                 json_versions = json.load(fh)
@@ -443,12 +496,15 @@ class Cli:
             print(f"Last version date {last_version_date}")
 
         def commit(version, message: str) -> None:
-            subprocess.check_call((
-                self.GIT,
-                'commit',
-                '-m', message,
-                f'--date={version.versionDate}',
-            ))
+            subprocess.run(
+                (
+                    self.GIT,
+                    'commit',
+                    '-m', message,
+                    f'--date={version.versionDate}',
+                ),
+                check=True,
+            )
 
         # Fixme: progress callback
         #  how to get number of versions ?
@@ -472,8 +528,8 @@ class Cli:
             match page_history.actionType:
                 case 'initial' | 'edit':
                     print(f'{version.action} {version.path}')
-                    file_path = version.write('.', check_exists=False)
-                    subprocess.check_call((self.GIT, 'add', file_path))
+                    file_path = version.sync('.', check_exists=False)
+                    subprocess.run((self.GIT, 'add', file_path), check=True)
                     commit(version, 'update')
                 case 'move':
                     if page_history.changed:
@@ -486,10 +542,10 @@ class Cli:
                             new_path = page.file_path('.', page_history.new_path)
                             new_path.parent.mkdir(parents=True, exist_ok=True)
                             # Fixme: remove old directory
-                            subprocess.check_call((self.GIT, 'mv', old_path, new_path))
+                            subprocess.run((self.GIT, 'mv', old_path, new_path), check=True)
                             # update file
-                            file_path = version.write('.', check_exists=False)
-                            subprocess.check_call((self.GIT, 'add', file_path))
+                            file_path = version.sync('.', check_exists=False)
+                            subprocess.run((self.GIT, 'add', file_path), check=True)
                             commit(version, 'move')
                     else:
                         print(f'{version.action} unchanged')
