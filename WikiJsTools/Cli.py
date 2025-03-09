@@ -127,9 +127,11 @@ class CustomCompleter(Completer):
             complete_event: CompleteEvent,
     ) -> Iterable[Completion]:
         line = document.current_line.lstrip()
-        self._cli._init()
-        cwd = self._cli._current_path
         if line.startswith('cd '):
+            cwd = self._cli._current_path
+            words = cwd.folder_names
+        elif line.startswith('cda '):
+            cwd = self._cli._current_asset_folder
             words = cwd.folder_names
         else:
             words = self._commands
@@ -176,7 +178,7 @@ class Cli:
         self._completer = CustomCompleter(self, self.COMMANDS)
         self._page_tree = None
         self._current_path = None
-        self._asset_folders = None
+        self._asset_tree = None
         self._current_asset_folder = None
 
     ##############################################
@@ -226,6 +228,10 @@ class Cli:
     ##############################################
 
     def cli(self, query: str) -> None:
+        self.print("<red>Build tree...</red>")
+        self._init()
+        self.print("<red>Done</red>")
+
         if query:
             if not self.run(query):
                 return
@@ -369,8 +375,11 @@ class Cli:
     ##############################################
 
     def reset(self) -> None:
+        """Reset page and folder tree"""
         self._page_tree = self._api.build_page_tree()
+        self._asset_tree = self._api.build_asset_tree()
         self._current_path = self._page_tree
+        self._current_asset_folder = self._asset_tree
         # reset current_path ?
 
     def _init(self) -> None:
@@ -380,6 +389,7 @@ class Cli:
     ##############################################
 
     def dir(self) -> None:
+        """List the current path"""
         self._init()
         self.print(f"<red>CWD</red> <blue>{self._current_path.path}</blue>")
         # for _ in self._current_path.folder_childs:
@@ -388,7 +398,7 @@ class Cli:
             if _.is_folder:
                 self.print(f"  <green>{_.name} /</green>")
             else:
-                self.print(f"  <blue>{_.name}</blue>")
+                self.print(f"  <blue>{_.name}</blue> : <orange>{_.page.title}</orange>")
 
     ##############################################
 
@@ -410,6 +420,43 @@ class Cli:
                 self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
             self._current_path = _
         self.print(f"<red>moved to</red> <blue>{self._current_path.path}</blue>")
+
+    ##############################################
+
+    def dira(self) -> None:
+        """List the current asset folder"""
+        self._init()
+        self.print(f"<red>CWD</red> <blue>{self._current_asset_folder.path}</blue>")
+        # for _ in self._current_path.folder_childs:
+        #     self.print(f"  {_.name}")
+        for _ in self._current_asset_folder.childs:
+            if _.is_folder:
+                self.print(f"  <green>{_.name} /</green>")
+            else:
+                self.print(f"  <blue>{_.name}</blue>")
+
+    ##############################################
+
+    def cda(self, path: str) -> None:
+        """Change the current asset folder"""
+        self._init()
+        if path == '..':
+            if not self._current_asset_folder.is_root:
+                self._current_asset_folder = self._current_asset_folder.parent
+        elif path.startswith('/') or '/' in path:
+            raise NotImplementedError
+        else:
+            _ = self._current_asset_folder[path]
+            if _.is_leaf:
+                self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
+            self._current_asset_folder = _
+        self.print(f"<red>moved to</red> <blue>{self._current_asset_folder.path}</blue>")
+
+        # try:
+        #     self._current_asset_folder = self._asset_folders[path]
+        #     self.print(f"<red>moved to</red> <blue>{path}</blue>")
+        # except KeyError:
+        #     self.print(f"<red>Error:</red> <blue>{path}</blue> <red>not found</red>")
 
     ##############################################
 
@@ -537,10 +584,6 @@ class Cli:
     def asset(self, show_files: bool = True, show_folder_path: bool = False) -> None:
         """List the assets"""
         show_files = self._to_bool(show_files)
-        # Build asset folder tree
-        self._asset_folders = {
-            '/': AssetFolder(self, id=0, name='', slug='')
-        }
         def show_folder(folder_id: int = 0, indent: int = 0, stack: list = []):
             indent_str = '  '*indent
             if show_files:
@@ -550,8 +593,6 @@ class Cli:
                     self.print(f"{indent_str}  {url}")
             for _ in self._api.list_asset_subfolder(folder_id):
                 path = '/'.join(stack + [_.name])
-                _.path = path
-                self._asset_folders[path] = _
                 # print(f"{indent_str}- {_.name} {_.slug} {_.id}")
                 if show_folder_path:
                     self.print(f"<red>{path}</red>    <green>{_.id}</green>")
@@ -560,18 +601,6 @@ class Cli:
                 show_folder(_.id, indent + 1, stack + [_.name])
         self.print('<blue>/</blue>')
         show_folder()
-
-    ##############################################
-
-    def cd_asset(self, path: str) -> None:
-        """Change the current asset folder"""
-        if self._asset_folders is None:
-            self.asset(show_files=False, show_folder_path=True)
-        try:
-            self._current_asset_folder = self._asset_folders[path]
-            self.print(f"<red>moved to</red> <blue>{path}</blue>")
-        except KeyError:
-            self.print(f"<red>Error:</red> <blue>{path}</blue> <red>not found</red>")
 
     ##############################################
 

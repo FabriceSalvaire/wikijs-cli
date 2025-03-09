@@ -788,6 +788,7 @@ query ($path: String!, $locale: String!) {
                     prev.add_child(node)
                 # print(f'{prev} // {node}')
                 prev = node
+            prev.page = page
         return root
 
     ##############################################
@@ -853,6 +854,18 @@ query ($parentFolderId: Int!) {
         data = self.query_wikijs(query)
         for _ in xpath(data, 'data/assets/folders'):
             yield AssetFolder(self, **_)
+
+    ##############################################
+
+    def build_asset_tree(self) -> Node:
+        root = Node()
+        def process_folder(parent: Node, folder_id: int) -> None:
+            for _ in self.list_asset_subfolder(folder_id):
+                node = Node(_.name)
+                parent.add_child(node)
+                process_folder(node, _.id)
+        process_folder(root, 0)
+        return root
 
     ##############################################
 
