@@ -127,10 +127,18 @@ class CustomCompleter(Completer):
             complete_event: CompleteEvent,
     ) -> Iterable[Completion]:
         line = document.current_line.lstrip()
-        if line.startswith('cd '):
-            cwd = self._cli._current_path
+        CD = 'cd '
+        CDA = 'cda '
+        if line.startswith(CD):
+            path = line[len(CD):]   # .split()
+            cwd = self._cli._current_path.find(path)
+            # if '/' in line:
+            #     path = line[len(CD):]
+            #     cwd = self._cli._current_path.find(path)
+            # else:
+            #     cwd = self._cli._current_path
             words = cwd.folder_names
-        elif line.startswith('cda '):
+        elif line.startswith(CDA):
             cwd = self._cli._current_asset_folder
             words = cwd.folder_names
         else:
@@ -388,7 +396,7 @@ class Cli:
 
     ##############################################
 
-    def dir(self) -> None:
+    def ls(self) -> None:
         """List the current path"""
         self._init()
         self.print(f"<red>CWD</red> <blue>{self._current_path.path}</blue>")
@@ -402,20 +410,22 @@ class Cli:
 
     ##############################################
 
-    def cd(self, path: str) -> None:
+    def cd(self, *path: str) -> None:
         """Change the current path"""
         self._init()
         # if path.endswith('/'):
         #     path = path[:-1]
         # self._current_path = path
         # self.print(f"<red>moved to</red> <blue>{path}</blue>")
-        if path == '..':
+        if path[0] == '..':
             if not self._current_path.is_root:
                 self._current_path = self._current_path.parent
-        elif path.startswith('/') or '/' in path:
-            raise NotImplementedError
+        # elif path.startswith('/') or '/' in path:
+        #     raise NotImplementedError
         else:
-            _ = self._current_path[path]
+            # _ = self._current_path[path]
+            path = ' '.join(path)
+            _ = self._current_path.find(path)
             if _.is_leaf:
                 self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
             self._current_path = _
@@ -423,7 +433,7 @@ class Cli:
 
     ##############################################
 
-    def dira(self) -> None:
+    def lsa(self) -> None:
         """List the current asset folder"""
         self._init()
         self.print(f"<red>CWD</red> <blue>{self._current_asset_folder.path}</blue>")

@@ -97,14 +97,27 @@ class Node:
     def __getitem__(self, name: str) -> 'Node':
         return self._childs[name]
 
+    def __contains__(self, name: str) -> bool:
+        return name in self._childs
+
     ##############################################
 
-    def find(self, path: list[str]) -> 'Node':
+    def _find_impl(self, path: list[str]) -> 'Node':
         if path:
             _ = path.pop()
-            return self[_].find(path)
+            if _ in self:
+                return self[_]._find_impl(path)
+            else:
+                return self
         else:
             return self
+
+    def find(self, path: str) -> 'Node':
+        # path = list(filter(bool, path.split('/')))
+        path = list(filter(bool, path.split()))
+        path = list(reversed(path))
+        _ = self._find_impl(path)
+        return _
 
     ##############################################
 
