@@ -82,6 +82,7 @@ class CustomCompleter(Completer):
             document: Document,
             complete_event: CompleteEvent,
             words: list[str],
+            separator: str,
     ) -> Iterable[Completion]:
         # Get list of words.
         # if callable(words):
@@ -91,9 +92,12 @@ class CustomCompleter(Completer):
         # if self.sentence:
         #     word_before_cursor = document.text_before_cursor
         # else:
-        word_before_cursor = document.get_word_before_cursor(
-            WORD=self.WORD, pattern=self.pattern
-        )
+        # word_before_cursor = document.get_word_before_cursor(
+        #     WORD=self.WORD, pattern=self.pattern
+        # )
+        line = document.current_line
+        index = line.rfind(separator)
+        word_before_cursor = line[index+1:]
 
         if self.ignore_case:
             word_before_cursor = word_before_cursor.lower()
@@ -129,21 +133,24 @@ class CustomCompleter(Completer):
         line = document.current_line.lstrip()
         CD = 'cd '
         CDA = 'cda '
+        separator = ' '
+
+        def handle_cd(current_path, path):
+            cwd = current_path.find(path)
+            if '/' in path:
+                nonlocal separator
+                separator = '/'
+            return cwd.folder_names
+
         if line.startswith(CD):
-            path = line[len(CD):]   # .split()
-            cwd = self._cli._current_path.find(path)
-            # if '/' in line:
-            #     path = line[len(CD):]
-            #     cwd = self._cli._current_path.find(path)
-            # else:
-            #     cwd = self._cli._current_path
-            words = cwd.folder_names
+            path = line[len(CD):]
+            words = handle_cd(self._cli._current_path, path)
         elif line.startswith(CDA):
-            cwd = self._cli._current_asset_folder
-            words = cwd.folder_names
+            path = line[len(CDA):]
+            words = handle_cd(self._cli._current_asset_folder, path)
         else:
             words = self._commands
-        yield from self._get_completions(document, complete_event, words)
+        yield from self._get_completions(document, complete_event, words, separator)
 
 ####################################################################################################
 
@@ -410,21 +417,13 @@ class Cli:
 
     ##############################################
 
-    def cd(self, *path: str) -> None:
+    def cd(self, path: str) -> None:
         """Change the current path"""
         self._init()
-        # if path.endswith('/'):
-        #     path = path[:-1]
-        # self._current_path = path
-        # self.print(f"<red>moved to</red> <blue>{path}</blue>")
-        if path[0] == '..':
+        if path == '..':
             if not self._current_path.is_root:
                 self._current_path = self._current_path.parent
-        # elif path.startswith('/') or '/' in path:
-        #     raise NotImplementedError
         else:
-            # _ = self._current_path[path]
-            path = ' '.join(path)
             _ = self._current_path.find(path)
             if _.is_leaf:
                 self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
@@ -453,10 +452,8 @@ class Cli:
         if path == '..':
             if not self._current_asset_folder.is_root:
                 self._current_asset_folder = self._current_asset_folder.parent
-        elif path.startswith('/') or '/' in path:
-            raise NotImplementedError
         else:
-            _ = self._current_asset_folder[path]
+            _ = self._current_asset_folder.find(path)
             if _.is_leaf:
                 self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
             self._current_asset_folder = _

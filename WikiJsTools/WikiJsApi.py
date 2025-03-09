@@ -107,17 +107,14 @@ class Node:
             _ = path.pop()
             if _ in self:
                 return self[_]._find_impl(path)
-            else:
-                return self
-        else:
-            return self
+        #     else:
+        #         return self
+        # else:
+        return self
 
     def find(self, path: str) -> 'Node':
-        # path = list(filter(bool, path.split('/')))
-        path = list(filter(bool, path.split()))
-        path = list(reversed(path))
-        _ = self._find_impl(path)
-        return _
+        path = list(filter(bool, reversed(path.split('/'))))
+        return self._find_impl(path)
 
     ##############################################
 
