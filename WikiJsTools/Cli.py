@@ -127,8 +127,9 @@ class CustomCompleter(Completer):
             complete_event: CompleteEvent,
     ) -> Iterable[Completion]:
         line = document.current_line.lstrip()
+        self._cli._init()
         cwd = self._cli._current_path
-        if line.startswith('cd ') and cwd:
+        if line.startswith('cd '):
             words = cwd.folder_names
         else:
             words = self._commands
@@ -375,15 +376,18 @@ class Cli:
     ##############################################
 
     def reset(self) -> None:
-        if self._page_tree is None:
-            self._page_tree = self._api.build_page_tree()
-            self._current_path = self._page_tree
+        self._page_tree = self._api.build_page_tree()
+        self._current_path = self._page_tree
         # reset current_path ?
+
+    def _init(self) -> None:
+        if self._page_tree is None:
+            self.reset()
 
     ##############################################
 
     def dir(self) -> None:
-        self.reset()
+        self._init()
         self.print(f"<red>CWD</red> <blue>{self._current_path.path}</blue>")
         # for _ in self._current_path.folder_childs:
         #     self.print(f"  {_.name}")
@@ -397,7 +401,7 @@ class Cli:
 
     def cd(self, path: str) -> None:
         """Change the current path"""
-        self.reset()
+        self._init()
         # if path.endswith('/'):
         #     path = path[:-1]
         # self._current_path = path
