@@ -27,6 +27,7 @@ from prompt_toolkit.completion import WordCompleter, Completer, Completion, Comp
 from prompt_toolkit.document import Document
 # from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
+from prompt_toolkit.shortcuts import ProgressBar
 from prompt_toolkit.styles import Style
 
 from .WikiJsApi import Page, WikiJsApi, AssetFolder, Node
@@ -131,8 +132,6 @@ class CustomCompleter(Completer):
             complete_event: CompleteEvent,
     ) -> Iterable[Completion]:
         line = document.current_line.lstrip()
-        CD = 'cd '
-        CDA = 'cda '
         separator = ' '
 
         def handle_cd(current_path, path):
@@ -142,14 +141,24 @@ class CustomCompleter(Completer):
                 separator = '/'
             return cwd.folder_names
 
-        if line.startswith(CD):
-            path = line[len(CD):]
-            words = handle_cd(self._cli._current_path, path)
-        elif line.startswith(CDA):
-            path = line[len(CDA):]
-            words = handle_cd(self._cli._current_asset_folder, path)
+        index = line.find(' ')
+        if index > 0:
+            left_word = line[:index]
+            index += 1
+            right_word = line[index:]
         else:
-            words = self._commands
+            left_word = None
+            right_word = None
+
+        match left_word:
+            case 'cd':
+                words = handle_cd(self._cli._current_path, right_word)
+            case 'cda':
+                words = handle_cd(self._cli._current_asset_folder, right_word)
+            case 'create' | 'update':
+                words = [_.name for _ in sorted(Path().cwd().glob('*.md'))]
+            case _:
+                words = self._commands
         yield from self._get_completions(document, complete_event, words, separator)
 
 ####################################################################################################
@@ -391,7 +400,7 @@ class Cli:
 
     def reset(self) -> None:
         """Reset page and folder tree"""
-        self._page_tree = self._api.build_page_tree()
+        self._page_tree = self._api.build_page_tree(ProgressBar)
         self._asset_tree = self._api.build_asset_tree()
         self._current_path = self._page_tree
         self._current_asset_folder = self._asset_tree

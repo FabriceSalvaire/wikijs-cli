@@ -668,6 +668,12 @@ system {
 
     ##############################################
 
+    @property
+    def number_of_pages(self) -> int:
+        return self._number_of_pages
+
+    ##############################################
+
     def page(self, path: str, locale: str = 'fr') -> Page:
         query = {
             'variables': {
@@ -783,9 +789,10 @@ query ($path: String!, $locale: String!) {
 
     ##############################################
 
-    def build_page_tree(self) -> Node:
+    def build_page_tree(self, progress_bar_cls) -> Node:
         root = Node()
-        for page in self.list_pages():
+
+        def process_page(page: Page) -> None:
             # print('-'*10)
             # print(page.path)
             path = page.split_path
@@ -799,6 +806,16 @@ query ($path: String!, $locale: String!) {
                 # print(f'{prev} // {node}')
                 prev = node
             prev.page = page
+
+        pages = self.list_pages()
+        if progress_bar_cls is not None:
+            with progress_bar_cls() as pb:
+                for page in pb(pages, total=self._number_of_pages):
+                    process_page(page)
+        else:
+            for page in pages:
+                process_page(page)
+
         return root
 
     ##############################################
@@ -868,12 +885,18 @@ query ($parentFolderId: Int!) {
     ##############################################
 
     def build_asset_tree(self) -> Node:
+        # We cannot implement a progress bar since we don't know the number of nodes.
+        # A workaround would be to save the number of nodes in a config file.
+        # And to use it for the next run.
+
         root = Node()
+
         def process_folder(parent: Node, folder_id: int) -> None:
             for _ in self.list_asset_subfolder(folder_id):
                 node = Node(_.name)
                 parent.add_child(node)
                 process_folder(node, _.id)
+
         process_folder(root, 0)
         return root
 
