@@ -368,13 +368,6 @@ class Cli:
 
     ##############################################
 
-    def cwd(self) -> None:
-        """Show current working directry"""
-        self.print(f"<blue>Current path</blue> <green>{self._current_path.path}</green>")
-        self.print(f"<blue>Current asset path</blue> <green>{self._current_asset_folder}</green>")
-
-    ##############################################
-
     def reset(self) -> None:
         self._page_tree = self._api.build_page_tree()
         self._current_path = self._page_tree
@@ -417,6 +410,13 @@ class Cli:
                 self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
             self._current_path = _
         self.print(f"<red>moved to</red> <blue>{self._current_path.path}</blue>")
+
+    ##############################################
+
+    def cwd(self) -> None:
+        """Show current working directry"""
+        self.print(f"<blue>Current path</blue> <green>{self._current_path.path}</green>")
+        self.print(f"<blue>Current asset path</blue> <green>{self._current_asset_folder}</green>")
 
     ##############################################
 
