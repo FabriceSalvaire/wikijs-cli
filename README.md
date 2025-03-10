@@ -10,7 +10,8 @@ Then I discovered Wiki.js and its modern look-and-feel. </br>o
 But later I discovered that in fact it was not ready for production and had several issues. </br>
 Wiki.js was developed by only one person, that implemented successively three versions, but none was ever completed.  Some users call it a vaporware.  Maybe too much people expect free support for such a tool... </br>
 Despite this situation, Wiki.js features a GraphQL API which permits to interact with the server.
-Wiki.js client uses the Vue framework.
+Wiki.js 2 client uses the [Vue.js - The Progressive JavaScript Framework | Vue.js](https://vuejs.org/)
+ framework. The vega branch aka version 3 uses [Quasar Framework](https://quasar.dev).
 
 
 This CLI is just a tool to leverage the current implementation (Wiki.js 2).
@@ -33,6 +34,8 @@ It features these commands:
 - a Git export and sync
 
   I was unable to use this feature of Wiki.js.
+
+We could implement Fuse, but the file-system API can only report `errno` errors (No such file or directory, I/O error, Permission denied, File exists, ...) which is a limitation to report Wiki errors like conflict.  However, it does not apply for a read-only implementation.
 
 # Actual Wiki.js limitations
 
