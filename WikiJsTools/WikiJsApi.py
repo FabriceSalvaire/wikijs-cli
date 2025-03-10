@@ -321,7 +321,7 @@ class BasePage:
     @classmethod
     def read(self, input: Path | str, api: 'WikiJsApi') -> 'Page':
         input = Path(input)
-        data = {}
+        data = dict(id=None, createdAt=None, updatedAt=None)
         with open(input, 'r', encoding='utf8') as fh:
             content = None
             for line in fh.readlines():
@@ -330,7 +330,11 @@ class BasePage:
                     if line == self.RULE:
                         content = ''
                     else:
-                        key, value = [_.strip() for _ in line.split(':')]
+                        index = line.find(":")
+                        key = line[:index].strip()
+                        value = line[index+1:].strip()
+                        if key == 'id' and value:
+                            value = int(value)
                         data[key] = value
                 else:
                     content += line
@@ -338,7 +342,8 @@ class BasePage:
         data['tags'] = [_.strip() for _ in data['tags'][1:-1].split(',') if _.strip()]
         for _ in ('isPublished', 'isPrivate'):
             data[_] = True if data[_] == 'True' else False
-        return Page(api, **data, id=None, createdAt=None, updatedAt=None)
+        pprint(data)
+        return Page(api, **data)
 
 ####################################################################################################
 
