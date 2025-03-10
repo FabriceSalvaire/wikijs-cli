@@ -1,28 +1,23 @@
 # A CLI for Wiki.js
 
-This repo contains a CLI written in Python (1) for [Wiki.js](https://js.wiki).
+This repo contains a CLI for [Wiki.js](https://js.wiki) written in Python (1).
 (1) because I master Python
 
 For some reason free software Wiki implementations are a bit complicated... </br>
 In the past, I used the [MoinMoin](http://moinmo.in) Wiki but MoinMoin2 was never released as stable. </br>
-Then I used [Redmine](https://www.redmine.org/projects/redmine/wiki/RedmineWikis) Wiki but it is not well suited for smartphone and this component is not the most maintained and it require an extension for dangling pages. </br>
-Then I discovered Wiki.js and its modern look-and-feel. </br>
-But later I realised that in fact it was not ready for production and shows several issues. </br>
-Wiki.js was developed by only one person, that implemented successively three versions, but none was ever completed.  Some users call it a vaporware.  Maybe too much people expect free support for such a tool. </br>
+Then I used [Redmine](https://www.redmine.org/projects/redmine/wiki/RedmineWikis) Wiki but it is not well suited for smartphone and this component is not the most maintained, moreover it require an extension for dangling pages. </br>
+Then I discovered Wiki.js and its modern look-and-feel. </br>o
+But later I discovered that in fact it was not ready for production and had several issues. </br>
+Wiki.js was developed by only one person, that implemented successively three versions, but none was ever completed.  Some users call it a vaporware.  Maybe too much people expect free support for such a tool... </br>
 Despite this situation, Wiki.js features a GraphQL API which permits to interact with the server.
 Wiki.js client uses the Vue framework.
 
 
 This CLI is just a tool to leverage the current implementation (Wiki.js 2).
 It features these commands:
+- input completions for page and file name
 - commands to list pages, assets, ...
-- a disk export (with network transparency)
-- a Git export and sync
-
-  I was unable to use this feature of Wiki.js.
-- a check tool
-
-  for example, to check for dangling links
+- `cd` and `ls` command to navigate in the page and asset hierarchy
 - dump a page to disk
 - update a page from disk
 
@@ -30,9 +25,17 @@ It features these commands:
   I have issues with Firefox WithExEditor and LanguageTool extensions and ckeditor
 - create a page from disk
 - move pages
+- upload asset
+- a check tool
 
+  for example, to check for dangling links
+- a disk export (with network transparency)
+- a Git export and sync
 
-**Actual Wiki.js limitations:**
+  I was unable to use this feature of Wiki.js.
+
+# Actual Wiki.js limitations
+
 - A deleted page is really deleted and disappear of the history !
 
   This is weird behaviour and this feature should not be used.
@@ -64,6 +67,8 @@ It features these commands:
   We have to create a folder page, to customize the folder title.
   If we want to move a node of the folder hierarchy, then we have to move each page manually one by one (i.e. rename the path).
   This is ridiculously inefficient !
+
+# Notes
 
 **Curated documentation links:**
 - [Pages | Wiki.js](https://docs.requarks.io/guide/pages)
@@ -97,3 +102,8 @@ It features these commands:
 
   task to render page
 -`server/modules/storage` storage plugins
+
+# Related Projects
+
+- [gierens/wikijs-rs: API bindings, CLI client and FUSE filesystem for Wiki.js written in Rust.](https://github.com/gierens/wikijs-rs)
+  According to the Readme, it seems to be very limited. And the number of lines of code is amazing in comparison to this 2k loc library! It does not make sense to use Rust and low level programming for such application...
