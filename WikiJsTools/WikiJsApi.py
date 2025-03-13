@@ -47,13 +47,13 @@ class Node:
         return self._name
 
     @property
-    def path(self) -> str:
+    def path(self) -> PurePosixPath:
         if self.is_root:
-            return '/'
+            return PurePosixPath('/')
         elif self.parent.is_root:
-            return f'/{self._name}'
+            return PurePosixPath('/', self._name)
         else:
-            return f'{self.parent.path}/{self._name}'
+            return self.parent.path.joinpath(self._name)
 
     @property
     def is_root(self) -> bool:
@@ -123,7 +123,8 @@ class Node:
         return self
 
     def find(self, path: str) -> 'Node':
-        path = list(filter(bool, reversed(path.split('/'))))
+        it = reversed(str(path).split('/'))
+        path = list(filter(bool, it))
         return self._find_impl(path)
 
     ##############################################
@@ -175,11 +176,11 @@ class BasePage:
 
     @property
     def split_path(self) -> list[str]:
-        return self.path.split('/')
+        return str(self.path).split('/')
 
     @property
-    def patho(self) -> PurePosixPath:
-        return PurePosixPath(self.path)
+    def path_str(self) -> str:
+        return str(self.path)
 
     ##############################################
 
@@ -207,7 +208,7 @@ class BasePage:
             path: str = None,
             content_type: str = 'markdown',
     ) -> Path:
-        _ = path.split('/')
+        _ = str(path).split('/')
         _[-1] += cls.extension_for(content_type)
         return Path(dst).joinpath(locale, *_)
 
@@ -358,7 +359,7 @@ class Page(BasePage):
     api: 'WikiJsApi'
 
     id: int
-    path: str
+    path: PurePosixPath
     locale: str
     title: str
     description: str
@@ -386,6 +387,11 @@ class Page(BasePage):
     # creatorId: int
     # creatorName: str
     # creatorEmail: str
+
+    ##############################################
+
+    def __post_init__(self):
+        self.path = PurePosixPath(self.path)
 
     ##############################################
 
@@ -597,7 +603,7 @@ class Asset:
 
 def xpath(data: dict, path: str) -> dict:
     d = data
-    for _ in path.split('/'):
+    for _ in str(path).split('/'):
         d = d[_]
     return d
 
@@ -1029,10 +1035,11 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
             'isPublished',
             'isPrivate',
             'locale',
-            'path',
+            # 'path',
             'tags',
             'title',
         )}
+        variables['path'] = page.path_str
         variables.update({
             'editor': page.contentType,
             'publishEndDate': '',
@@ -1080,7 +1087,7 @@ mutation ($content: String!, $description: String!, $editor: String!, $isPrivate
                 'isPrivate': False,
                 'isPublished': True,
                 'locale': page.locale,
-                'path': page.path,
+                'path': page.path_str,
                 'publishEndDate': '',
                 'publishStartDate': '',
                 'scriptCss': '',

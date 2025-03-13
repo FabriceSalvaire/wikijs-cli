@@ -47,6 +47,9 @@ from .WikiJsApi import Page, WikiJsApi, AssetFolder, Node
 
 LINESEP = os.linesep
 
+type PagePath = str   # aka PurePosixPath
+type FilePath = str   # aka Path
+
 ####################################################################################################
 
 class CustomCompleter(Completer):
@@ -366,7 +369,7 @@ class Cli:
 
     ##############################################
 
-    def listp(self, path: str) -> None:
+    def listp(self, path: PagePath) -> None:
         for page in self._api.list_pages():
             if path in page.path.lower():
                 self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> @{page.locale} {page.id:3}")
@@ -380,7 +383,7 @@ class Cli:
 
     ##############################################
 
-    def tree(self, path: str) -> None:
+    def tree(self, path: PagePath) -> None:
         """Show page tree"""
         pages = list(self._api.tree(path))
         pages.sort(key=lambda _: _.path)
@@ -391,7 +394,7 @@ class Cli:
 
     ##############################################
 
-    def dump(self, path: str, output: str = None) -> None:
+    def dump(self, path: PagePath, output: FilePath = None) -> None:
         """dump a page"""
         path = self._absolut_path(path)
         page = self._api.page(path)   # locale=
@@ -443,7 +446,7 @@ class Cli:
 
     ##############################################
 
-    def cd(self, path: str) -> None:
+    def cd(self, path: PagePath) -> None:
         """Change the current path"""
         self._init()
         if path == '..':
@@ -472,7 +475,7 @@ class Cli:
 
     ##############################################
 
-    def cda(self, path: str) -> None:
+    def cda(self, path: PagePath) -> None:
         """Change the current asset folder"""
         self._init()
         if path == '..':
@@ -509,7 +512,7 @@ class Cli:
 
     ##############################################
 
-    def template(self, dst: str, path: str = None, locale: str = 'fr', content_type: str = 'markdown') -> None:
+    def template(self, dst: FilePath, path: PagePath = None, locale: str = 'fr', content_type: str = 'markdown') -> None:
         """Write a page template"""
         dst = self._fix_extension(dst)
         if self._current_path:
@@ -527,13 +530,13 @@ class Cli:
 
     ##############################################
 
-    def emc(self, dst: str) -> None:
+    def emc(self, dst: FilePath) -> None:
         dst = self._fix_extension(dst)
         subprocess.Popen(('/usr/bin/emacsclient', dst), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     ##############################################
 
-    def open(self, path: str, locale: str = 'fr') -> None:
+    def open(self, path: PagePath, locale: str = 'fr') -> None:
         path = self._absolut_path(path)
         url = f'{self._api.api_url}/{locale}/{path}'
         self.print(f"<red>Open</red>  <blue>{url}</blue>")
@@ -541,7 +544,7 @@ class Cli:
 
     ##############################################
 
-    def create(self, input: str) -> None:
+    def create(self, input: FilePath) -> None:
         """Create a new page"""
         input = self._fix_extension(input)
         page = Page.read(input, self._api)
@@ -556,7 +559,7 @@ class Cli:
 
     ##############################################
 
-    def diff(self, input: str = None) -> None:
+    def diff(self, input: FilePath = None) -> None:
         """Diff a page"""
         file_page = Page.read(input, self._api)
         wiki_page = file_page.reload()
@@ -584,7 +587,7 @@ class Cli:
 
     ##############################################
 
-    def update(self, input: str = None) -> None:
+    def update(self, input: FilePath = None) -> None:
         """Update a page"""
         page = Page.read(input, self._api)
         _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
@@ -596,7 +599,7 @@ class Cli:
 
     ##############################################
 
-    def movep(self, old_path: str, new_path: str, dryrun: bool = False) -> None:
+    def movep(self, old_path: PagePath, new_path: PagePath, dryrun: bool = False) -> None:
         """Move the pages that match the path pattern"""
         # <pattern>/... -> <new_pattern>/...
         # relative page -> folder
@@ -616,11 +619,10 @@ class Cli:
     def _move_impl(self, path: str, new_path: str, rename: bool = False, dryrun: bool = False) -> None:
         """Move a page"""
         path = self._absolut_path(path)
-        print(path)
         page = self._api.page(path)   # locale=
         new_path = self._absolut_path(new_path)
         if not rename:
-            dest = new_path.joinpath(page.patho.name)
+            dest = new_path.joinpath(page.path.name)
         self.print(f"  Move page: <green>{path}</green> <red>-></red> <blue>{dest}</blue>")
         dryrun = self._to_bool(dryrun)
         if not dryrun:
@@ -628,12 +630,12 @@ class Cli:
             self.print(f"<red>{response.message}</red>")
 
 
-    def move(self, path: str, new_path: str, dryrun: bool = False) -> None:
+    def move(self, path: PagePath, new_path: PagePath, dryrun: bool = False) -> None:
         """Move a page"""
         self._move_impl(path, new_path, dryrun)
 
 
-    def rename(self, path: str, new_path: str, dryrun: bool = False) -> None:
+    def rename(self, path: PagePath, new_path: PagePath, dryrun: bool = False) -> None:
         """Rename a page"""
         self._move_impl(path, new_path, rename=True, dryrun=dryrun)
 
@@ -662,10 +664,11 @@ class Cli:
 
     ##############################################
 
-    def upload(self, path: Path | str, name: str = None) -> None:
+    def upload(self, path: FilePath, name: str = None) -> None:
         """Upload an asset"""
         if self._current_asset_folder is not None:
             self._current_asset_folder.upload(path, name)
+            # lists asset folder
             assets = list(self._current_asset_folder.list())
             assets.sort(key=lambda _: _.updated_at, reverse=True)
             self.print(f'<blue>{self._current_asset_folder.path}</blue>')
