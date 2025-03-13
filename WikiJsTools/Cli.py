@@ -39,7 +39,7 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.shortcuts import ProgressBar
 from prompt_toolkit.styles import Style
 
-from .WikiJsApi import Page, WikiJsApi, AssetFolder, Node
+from .WikiJsApi import Page, WikiJsApi, Node
 
 ####################################################################################################
 
@@ -48,7 +48,10 @@ from .WikiJsApi import Page, WikiJsApi, AssetFolder, Node
 LINESEP = os.linesep
 
 type PagePath = str   # aka PurePosixPath
+type PageFolder = str   # aka PurePosixPath
+type AssetFolder = str   # aka PurePosixPath
 type FilePath = str   # aka Path
+type Tag = str   # aka Path
 
 ####################################################################################################
 
@@ -144,33 +147,57 @@ class CustomCompleter(Completer):
             complete_event: CompleteEvent,
     ) -> Iterable[Completion]:
         line = document.current_line.lstrip()
+        line = re.sub(' +', ' ', line)
+        number_of_parameters = line.count(' ')
+        if number_of_parameters:
+            # words = [_ for _ in line.split(' ') if _]
+            # command = words[0]
+            index = line.rfind(' ')
+            right_word = line[index+1:]
+            index = line.find(' ')
+            command = line[:index]
+            func = getattr(Cli, command)
+            signature = inspect.signature(func)
+            parameters = list(signature.parameters.values())
+            parameter = parameters[number_of_parameters]   # 0 is self
+            parameter_type = parameter.annotation.__name__
+        else:
+            command = None
+            right_word = None
+            parameter_type = None
+        # print(f'Debug: "{command}" | "{right_word}" | {number_of_parameters} | {parameter_type}')
+
         separator = ' '
 
-        def handle_cd(current_path, path):
+        def handle_cd(current_path, path, folder: bool):
             cwd = current_path.find(path)
             if '/' in path:
                 nonlocal separator
                 separator = '/'
-            return cwd.folder_names
+            if folder:
+                return cwd.folder_names
+            else:
+                return cwd.leaf_names
 
-        index = line.find(' ')
-        if index > 0:
-            left_word = line[:index]
-            index += 1
-            right_word = line[index:]
+        if command is None:
+            words = self._commands
         else:
-            left_word = None
-            right_word = None
-
-        match left_word:
-            case 'cd':
-                words = handle_cd(self._cli._current_path, right_word)
-            case 'cda':
-                words = handle_cd(self._cli._current_asset_folder, right_word)
-            case 'create' | 'update':
-                words = [_.name for _ in sorted(Path().cwd().glob('*.md'))]
-            case _:
-                words = self._commands
+            words = ()
+            match parameter_type:
+                case 'bool':
+                    words = ('true', 'false')
+                case 'FilePath':
+                    # match command:
+                    #     case 'create' | 'update':
+                    cwd = Path().cwd()
+                    filenames = sorted(cwd.glob('*.md'))
+                    words = [_.name for _ in filenames]
+                case 'PagePath':
+                    words = handle_cd(self._cli._current_path, right_word, folder=False)
+                case 'PageFolder':
+                    words = handle_cd(self._cli._current_path, right_word, folder=True)
+                case 'AssetFolder':
+                    words = handle_cd(self._cli._current_asset_folder, right_word, folder=True)
         yield from self._get_completions(document, complete_event, words, separator)
 
 ####################################################################################################
@@ -446,7 +473,7 @@ class Cli:
 
     ##############################################
 
-    def cd(self, path: PagePath) -> None:
+    def cd(self, path: PageFolder) -> None:
         """Change the current path"""
         self._init()
         if path == '..':
@@ -475,7 +502,7 @@ class Cli:
 
     ##############################################
 
-    def cda(self, path: PagePath) -> None:
+    def cda(self, path: AssetFolder) -> None:
         """Change the current asset folder"""
         self._init()
         if path == '..':
@@ -630,7 +657,7 @@ class Cli:
             self.print(f"<red>{response.message}</red>")
 
 
-    def move(self, path: PagePath, new_path: PagePath, dryrun: bool = False) -> None:
+    def move(self, path: PagePath, new_path: PageFolder, dryrun: bool = False) -> None:
         """Move a page"""
         self._move_impl(path, new_path, dryrun)
 
@@ -912,7 +939,7 @@ class Cli:
 
     ##############################################
 
-    def search_tags(self, query: str) -> None:
+    def search_tags(self, query: Tag) -> None:
         """Search the tags"""
         for _ in self._api.search_tags(query):
             self.print(f'<blue>{_}</blue>')
