@@ -159,8 +159,11 @@ class CustomCompleter(Completer):
             func = getattr(Cli, command)
             signature = inspect.signature(func)
             parameters = list(signature.parameters.values())
-            parameter = parameters[number_of_parameters]   # 0 is self
-            parameter_type = parameter.annotation.__name__
+            if len(parameters) > 1:
+                parameter = parameters[number_of_parameters]   # 0 is self
+                parameter_type = parameter.annotation.__name__
+            else:
+                parameter_type = None
         else:
             command = None
             right_word = None
@@ -198,6 +201,9 @@ class CustomCompleter(Completer):
                     words = handle_cd(self._cli._current_path, right_word, folder=True)
                 case 'AssetFolder':
                     words = handle_cd(self._cli._current_asset_folder, right_word, folder=True)
+                case 'Tag':
+                    # Fixme: tag can have space !
+                    words = [_.tag for _ in self._cli._api.tags()]
         yield from self._get_completions(document, complete_event, words, separator)
 
 ####################################################################################################
@@ -939,7 +945,7 @@ class Cli:
 
     ##############################################
 
-    def search_tags(self, query: Tag) -> None:
+    def search_tags(self, query: str) -> None:
         """Search the tags"""
         for _ in self._api.search_tags(query):
             self.print(f'<blue>{_}</blue>')
