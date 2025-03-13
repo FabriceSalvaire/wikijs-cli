@@ -6,6 +6,7 @@ This repo contains a CLI for [Wiki.js](https://js.wiki) written in Python (1).
 For some reason free software Wiki implementations are a bit complicated... </br>
 In the past, I used the [MoinMoin](http://moinmo.in) Wiki but MoinMoin2 was never released as stable. </br>
 Then I used [Redmine](https://www.redmine.org/projects/redmine/wiki/RedmineWikis) Wiki but it is not well suited for smartphone and this component is not the most maintained, moreover it require an extension for dangling pages. </br>
+I also tried [MediaWiki](https://www.mediawiki.org/wiki/MediaWiki) but it is specialised for Wikipedia, written in PHP and customising the CSS is a nightmare.
 Then I discovered Wiki.js and its modern look-and-feel. </br>o
 But later I discovered that in fact it was not ready for production and had several issues. </br>
 Wiki.js was developed by only one person, that implemented successively three versions, but none was ever completed.  Some users call it a vaporware.  Maybe too much people expect free support for such a tool... </br>
@@ -55,9 +56,8 @@ We could implement Fuse, but the file-system API can only report `errno` errors 
   By clicking a link pointing to a non-existing page.
   Manually type the path in the browser address bar.
 
-  It means the path must be absolute.
-  We cannot simply create a page relative to a parent page !
-  Thus, contrary to every wiki, we cannot just add a link `[[MyNewWikiPage]]` to the page you want to create.
+  We can create a page relative to another one `[Title](foo/bar)`. Notice the title is required and is independent of the page title ! And, the HTML anchor will be invisible if the title is empty.
+  But, contrary to every wiki, we cannot just add a link `[[MyNewWikiPage]]` to the page you want to create.
   However, the drawback of this common approach, is to have to deal with dangling pages.
   Redmine requires an extension to show those pages else...
 
@@ -70,6 +70,9 @@ We could implement Fuse, but the file-system API can only report `errno` errors 
   We have to create a folder page, to customize the folder title.
   If we want to move a node of the folder hierarchy, then we have to move each page manually one by one (i.e. rename the path).
   This is ridiculously inefficient !
+- Page update
+
+  Wiki.js does not update the rendering of a page when a target (link) page is updated.
 
 # Notes
 
@@ -78,12 +81,16 @@ We could implement Fuse, but the file-system API can only report `errno` errors 
 - [Build Process | Wiki.js](https://docs.requarks.io/dev/build-process)
 
 
+**Curated Wiki links:**
+- [Help:Starting a new page - MediaWiki](https://www.mediawiki.org/wiki/Help:Starting_a_new_page)
+
+
 **Curated Javascript Library links:**
 - [Knex.js — SQL Query Builder for Javascript](https://knexjs.org)
 - [Objection.js — ORM for Node.js](https://vincit.github.io/objection.js/)
 - [Apollo GraphQL](https://www.apollographql.com/)
+- [markdown-it: Markdown parser](https://github.com/markdown-it/markdown-it)
 - [Cheerio — Javascript library for parsing and manipulating HTML and XML](https://cheerio.js.org)
-
 
 **Curated source code links:**
 - `dev/build/DockerFile` Yarn commands to build
@@ -105,6 +112,9 @@ We could implement Fuse, but the file-system API can only report `errno` errors 
 
   task to render page
 -`server/modules/storage` storage plugins
+- `server/modules/rendering/markdown-core/renderer.js` convet to HTML
+- `server/modules/rendering/html-core/renderer.js` handle HTML anchors
+
 
 # Related Projects
 
