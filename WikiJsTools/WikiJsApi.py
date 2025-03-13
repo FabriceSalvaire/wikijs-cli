@@ -6,12 +6,14 @@
 #
 ####################################################################################################
 
+# Fime: use PurePosixPath
+
 ####################################################################################################
 
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterator
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from pprint import pprint
 import os
 
@@ -174,6 +176,10 @@ class BasePage:
     @property
     def split_path(self) -> list[str]:
         return self.path.split('/')
+
+    @property
+    def patho(self) -> PurePosixPath:
+        return PurePosixPath(self.path)
 
     ##############################################
 
@@ -688,6 +694,10 @@ system {
     ##############################################
 
     def page(self, path: str, locale: str = 'fr') -> Page:
+        path = str(path)
+        # remove / from cd
+        if path.startswith('/'):
+            path = path[1:]
         query = {
             'variables': {
                 'path': path,
@@ -987,7 +997,7 @@ query ($id: Int!, $version_id: Int!) {
         query = {
             'variables': {
                 'id': page.id,
-                'destinationPath': path,
+                'destinationPath': str(path),
                 'destinationLocale': locale,
             },
             # __typename

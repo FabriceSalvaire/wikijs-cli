@@ -13,6 +13,7 @@ __all__ = ['Cli']
 ####################################################################################################
 
 from datetime import datetime
+from pathlib import PurePosixPath
 from pprint import pprint
 from typing import Iterable
 import difflib
@@ -336,6 +337,13 @@ class Cli:
 
     ##############################################
 
+    def _absolut_path(self, path: str) -> PurePosixPath:
+        if not path.startswith('/') and self._current_path:
+            path = self._current_path.join(path)
+        return PurePosixPath(path)
+
+    ##############################################
+
     def help(self, command: str) -> None:
         func = getattr(self, command)
         # help(func)
@@ -385,6 +393,7 @@ class Cli:
 
     def dump(self, path: str, output: str = None) -> None:
         """dump a page"""
+        path = self._absolut_path(path)
         page = self._api.page(path)   # locale=
         page.complete()
         _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
@@ -525,8 +534,7 @@ class Cli:
     ##############################################
 
     def open(self, path: str, locale: str = 'fr') -> None:
-        if self._current_path:
-            path = f'{self._current_path}/{path}'
+        path = self._absolut_path(path)
         url = f'{self._api.api_url}/{locale}/{path}'
         self.print(f"<red>Open</red>  <blue>{url}</blue>")
         subprocess.Popen(('/usr/bin/xdg-open', url), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -588,20 +596,46 @@ class Cli:
 
     ##############################################
 
-    def move(self, old_path: str, new_path: str, dryrun: bool = False) -> None:
+    def movep(self, old_path: str, new_path: str, dryrun: bool = False) -> None:
         """Move the pages that match the path pattern"""
+        # <pattern>/... -> <new_pattern>/...
+        # relative page -> folder
         dryrun = self._to_bool(dryrun)
-        self.print(f"  Move: <green>{old_path}</green> <red>-></red> <blue>{new_path}</blue>")
+        # self.print(f"  Move: <green>{old_path}</green> <red>-></red> <blue>{new_path}</blue>")
         for page in self._api.list_pages():
-            # for _ in ('portail',):
-            # if page.path.lower().startswith('.../' + _):
-            # print(page.path)
-            if page.path.startswith(old_path):
-                dest = page.path.replace(old_path, new_path)
-                self.print(f"  Move page: <green>{page.path}</green> <red>-></red> <blue>{dest}</blue>")
+            path = page.path
+            if path.startswith(old_path):
+                dest = path.replace(old_path, new_path)
+                self.print(f"  Move page: <green>{path}</green> <red>-></red> <blue>{dest}</blue>")
                 if not dryrun:
                     response = page.move(dest)
                     self.print(f"<red>{response.message}</red>")
+
+    ##############################################
+
+    def _move_impl(self, path: str, new_path: str, rename: bool = False, dryrun: bool = False) -> None:
+        """Move a page"""
+        path = self._absolut_path(path)
+        print(path)
+        page = self._api.page(path)   # locale=
+        new_path = self._absolut_path(new_path)
+        if not rename:
+            dest = new_path.joinpath(page.patho.name)
+        self.print(f"  Move page: <green>{path}</green> <red>-></red> <blue>{dest}</blue>")
+        dryrun = self._to_bool(dryrun)
+        if not dryrun:
+            response = page.move(dest)
+            self.print(f"<red>{response.message}</red>")
+
+
+    def move(self, path: str, new_path: str, dryrun: bool = False) -> None:
+        """Move a page"""
+        self._move_impl(path, new_path, dryrun)
+
+
+    def rename(self, path: str, new_path: str, dryrun: bool = False) -> None:
+        """Rename a page"""
+        self._move_impl(path, new_path, rename=True, dryrun=dryrun)
 
     ##############################################
 
