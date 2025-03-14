@@ -405,9 +405,9 @@ class Cli:
         for page in self._api.list_pages():
             if complete:
                 page.complete()
-                self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> {len(page.content):5} @{page.locale} {page.id:3}")
+                self.print(f"<green>{page.path_str:60}</green> <blue>{page.title:40}</blue> {len(page.content):5} @{page.locale} {page.id:3}")
             else:
-                self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> @{page.locale} {page.id:3}")
+                self.print(f"<green>{page.path_str:60}</green> <blue>{page.title:40}</blue> @{page.locale} {page.id:3}")
 
     ##############################################
 
@@ -431,7 +431,7 @@ class Cli:
         pages.sort(key=lambda _: _.path)
         for page in pages:
             is_folder = '/' if page.isFolder else ''
-            path = f"{page.path}{is_folder}"
+            path = f"{page.path_str}{is_folder}"
             self.print(f"<green>{path:60}</green> <blue>{page.title:40}</blue>")
 
     ##############################################
@@ -442,7 +442,7 @@ class Cli:
         page = self._api.page(path)   # locale=
         page.complete()
         # Fixme: write dump on stdout
-        _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
+        _ = f"<green>{page.path_str}</green> @{page.locale}{LINESEP}"
         _ += f"  <blue>{page.title}</blue>{LINESEP}"
         _ += f"  {page.id}{LINESEP}"
         self.print(_)
@@ -594,7 +594,7 @@ class Cli:
         if page.title is None:
             self.print(f"<red>Error: missing title</red>")
             return
-        _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
+        _ = f"<green>{page.path_str}</green> @{page.locale}{LINESEP}"
         _ += f"  <blue>{page.title}</blue>{LINESEP}"
         self.print(_)
         response = self._api.create_page(page)
@@ -633,7 +633,7 @@ class Cli:
     def update(self, input: FilePath = None) -> None:
         """Update a page"""
         page = Page.read(input, self._api)
-        _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
+        _ = f"<green>{page.path_str}</green> @{page.locale}{LINESEP}"
         _ += f"  <blue>{page.title}</blue>{LINESEP}"
         _ += f"  {page.id}{LINESEP}"
         self.print(_)
@@ -908,7 +908,7 @@ class Cli:
         pages = list(self._api.list_pages())
         page_paths = [_.path for _ in pages]
         for page in pages:
-            # print(f"Checking {page.path}")
+            # print(f"Checking {page.path_str}")
             page.complete()
             dead_links = []
             for line in page.content.splitlines():
