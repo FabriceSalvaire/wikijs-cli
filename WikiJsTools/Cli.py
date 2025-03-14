@@ -150,6 +150,7 @@ class CustomCompleter(Completer):
             complete_event: CompleteEvent,
     ) -> Iterable[Completion]:
         line = document.current_line.lstrip()
+        # remove multiple spaces
         line = re.sub(' +', ' ', line)
         number_of_parameters = line.count(' ')
         command = None
@@ -207,6 +208,7 @@ class CustomCompleter(Completer):
                 case 'AssetFolder':
                     words = handle_cd(self._cli._current_asset_folder, right_word, folder=True)
                 case 'Tag':
+                    # Fixme: 'list[Tag]' type is list
                     # Fixme: tag can have space !
                     words = [_.tag for _ in self._cli._api.tags()]
         yield from self._get_completions(document, complete_event, words, separator)
@@ -420,8 +422,10 @@ class Cli:
 
     ##############################################
 
-    def with_tags(self, *tags: list[Tag]) -> None:
-        """List the pages"""
+    # def with_tags(self, *tags: list[Tag]) -> None:
+    def with_tags(self, tag1: Tag, tag2: Tag = None, tag3: Tag = None, tag4: Tag = None) -> None:
+        """List the pages having those tags"""
+        tags = [_ for _ in (tag1, tag2, tag3, tag4) if _]
         for page in self._api.list_page_for_tags(tags):
             self.print(f"<green>{page.path_str:60}</green> <blue>{page.title:40}</blue> @{page.locale} {page.id:3}")
 
