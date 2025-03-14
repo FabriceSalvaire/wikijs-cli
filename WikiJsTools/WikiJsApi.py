@@ -19,6 +19,8 @@ import os
 
 import requests
 
+from . import query as Q
+
 ####################################################################################################
 
 # GraphQL
@@ -684,18 +686,7 @@ class WikiJsApi:
 
     def info(self) -> None:
         query = {
-            'query': '''
-{
-system {
-  info {
-    currentVersion
-    latestVersion
-    groupsTotal
-    pagesTotal
-    usersTotal
-    tagsTotal
-}}}
-            ''',
+            'query': Q.INFO,
         }
         data = self.query_wikijs(query)
         _ = xpath(data, 'data/system/info')
@@ -720,26 +711,7 @@ system {
                 'path': path,
                 'locale': locale,
             },
-            'query': '''
-query ($path: String!, $locale: String!) {
-  pages {
-    singleByPath(path: $path, locale: $locale) {
-      id
-      path
-      locale
-      title
-      description
-      contentType
-      isPublished
-      isPrivate
-      privateNS
-      createdAt
-      updatedAt
-      tags {
-        tag
-      }
-}}}
-            ''',
+            'query': Q.PAGE,
         }
         data = self.query_wikijs(query)
         _ = xpath(data, 'data/pages/singleByPath')
@@ -759,36 +731,11 @@ query ($path: String!, $locale: String!) {
                 # 'order_By': order_by,
                 # 'orderByDirection': order_by_direction,
             },
-# query ($limit: Int!, $orderBy: PageOrderBy!, $orderByDirection: PageOrderByDirection!) {
-#     list(limit: $limit, orderBy: $orderBy, orderByDirection: $orderByDirection) {
-            'query': f'''
-query ($limit: Int!) {{
-  pages {{
-    list(
-      limit: $limit,
-      orderBy: {order_by},
-      orderByDirection: {order_by_direction}
-    ) {{
-      id
-      path
-      title
-      locale
-      description
-      contentType
-      isPublished
-      isPrivate
-      privateNS
-      createdAt
-      updatedAt
-      tags
-}}}}}}
-''',
+            # eval(f'f"""{Q.LIST_PAGE}"""')
+            'query': Q.LIST_PAGE(order_by, order_by_direction),
         }
         # pprint(query)
         data = self.query_wikijs(query)
-        # {'data': {'pages': {'list': [{'id': 51,
-        #                               'path': 'Vera/a-apporter',
-        #                               'title': 'À apporter'},
         for _ in xpath(data, 'data/pages/list'):
             yield Page(api=self, **_)
 
@@ -806,22 +753,7 @@ query ($limit: Int!) {{
                 'locale': 'fr'
             },
             # parent: Int
-            'query': '''
-query ($path: String!, $locale: String!) {
-  pages {
-    tree(path: $path, mode: ALL, locale: $locale, includeAncestors: false) {
-      id
-      path
-      depth
-      title
-      isPrivate
-      isFolder
-      privateNS
-      parent
-      pageId
-      locale
-}}}
-''',
+            'query': Q.TREE,
         }
         data = self.query_wikijs(query)
         for _ in xpath(data, 'data/pages/tree'):
@@ -879,22 +811,7 @@ query ($path: String!, $locale: String!) {
             'variables': {
                 'id': page.id,
             },
-            'query': '''
-query ($id: Int!) {
-  pages {
-    history(id: $id) {
-      trail {
-        versionId
-        versionDate
-        authorId
-        authorName
-        actionType
-        valueBefore
-        valueAfter
-      }
-      total
-}}}
-            ''',
+            'query': Q.PAGE_HISTORY,
         }
         data = self.query_wikijs(query)
         history = xpath(data, 'data/pages/history/trail')
@@ -908,15 +825,7 @@ query ($id: Int!) {
             'variables': {
                 'parentFolderId': folder_id,
             },
-            'query': '''
-query ($parentFolderId: Int!) {
-  assets {
-    folders(parentFolderId: $parentFolderId) {
-      id
-      name
-      slug
-}}}
-        ''',
+            'query': Q.LIST_ASSET_SUBFOLDER,
         }
         data = self.query_wikijs(query)
         for _ in xpath(data, 'data/assets/folders'):
@@ -948,23 +857,9 @@ query ($parentFolderId: Int!) {
                 'folderId': folder_id,
                 'kind': 'ALL',
             },
-            'query': '''
-query ($folderId: Int!, $kind: AssetKind!) {
-  assets {
-    list(folderId: $folderId, kind: $kind) {
-      id
-      filename
-      ext
-      kind
-      mime
-      fileSize
-      metadata
-      createdAt
-      updatedAt
-}}}
-        ''',
-        # folder: AssetFolder
-        # author: Author
+            'query': Q.LIST_ASSET,
+            # folder: AssetFolder
+            # author: Author
         }
         data = self.query_wikijs(query)
         for _ in xpath(data, 'data/assets/list'):
@@ -978,31 +873,7 @@ query ($folderId: Int!, $kind: AssetKind!) {
                 'id': page_history.page.id,
                 'version_id': page_history.versionId,
             },
-            'query': '''
-query ($id: Int!, $version_id: Int!) {
-  pages {
-    version(pageId: $id, versionId: $version_id) {
-    action
-    authorId
-    authorName
-    content
-    contentType
-    createdAt
-    versionDate
-    description
-    editor
-    isPrivate
-    isPublished
-    locale
-    pageId
-    path
-    publishEndDate
-    publishStartDate
-    tags
-    title
-    versionId
-}}}
-            ''',
+            'query': Q.PAGE_VERSION,
         }
         data = self.query_wikijs(query)
         _ = xpath(data, 'data/pages/version')
@@ -1018,18 +889,7 @@ query ($id: Int!, $version_id: Int!) {
                 'destinationLocale': locale,
             },
             # __typename
-            'query': '''
-mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
-  pages {
-    move(id: $id, destinationPath: $destinationPath, destinationLocale: $destinationLocale) {
-      responseResult {
-        succeeded
-        errorCode
-        slug
-        message
-      }
-}}}
-            ''',
+            'query': Q.MOVE_PAGE,
         }
         # pprint(query)
         data = self.query_wikijs(query)
@@ -1060,22 +920,7 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
         })
         query = {
             'variables': variables,
-            "query": '''
-mutation ($content: String!, $description: String!, $editor: String!, $isPrivate: Boolean!, $isPublished: Boolean!, $locale: String!, $path: String!, $publishEndDate: Date, $publishStartDate: Date, $scriptCss: String, $scriptJs: String, $tags: [String]!, $title: String!) {
-  pages {
-    create(content: $content, description: $description, editor: $editor, isPrivate: $isPrivate, isPublished: $isPublished, locale: $locale, path: $path, publishEndDate: $publishEndDate, publishStartDate: $publishStartDate, scriptCss: $scriptCss, scriptJs: $scriptJs, tags: $tags, title: $title) {
-      responseResult {
-        succeeded
-        errorCode
-        slug
-        message
-      }
-      page {
-        id
-        updatedAt
-      }
-}}}
-            ''',
+            "query": Q.CREATE_PAGE,
         }
         # pprint(query)
         data = self.query_wikijs(query)
@@ -1088,7 +933,8 @@ mutation ($content: String!, $description: String!, $editor: String!, $isPrivate
     def update_page(self, page: Page) -> ResponseResult:
         # Fixme: checkConflicts
         # "variables":{"id":96,"checkoutDate":"2024-11-07T02:04:57.106Z"}
-        # "query ($id: Int!, $checkoutDate: Date!) {\n  pages {\n    checkConflicts(id: $id, checkoutDate: $checkoutDate)\n    __typename\n  }\n}\n"}]'
+        # "query ($id: Int!, $checkoutDate: Date!) { pages {
+        #   checkConflicts(id: $id, checkoutDate: $checkoutDate) }}"}]'
         query = {
             'variables': {
                 'id': page.id,
@@ -1106,21 +952,7 @@ mutation ($content: String!, $description: String!, $editor: String!, $isPrivate
                 'tags': page.tags,
                 'title': page.title,
             },
-            "query": '''
-mutation ($id: Int!, $content: String, $description: String, $editor: String, $isPrivate: Boolean, $isPublished: Boolean, $locale: String, $path: String, $publishEndDate: Date, $publishStartDate: Date, $scriptCss: String, $scriptJs: String, $tags: [String], $title: String) {
-  pages {
-    update(id: $id, content: $content, description: $description, editor: $editor, isPrivate: $isPrivate, isPublished: $isPublished, locale: $locale, path: $path, publishEndDate: $publishEndDate, publishStartDate: $publishStartDate, scriptCss: $scriptCss, scriptJs: $scriptJs, tags: $tags, title: $title) {
-      responseResult {
-        succeeded
-        errorCode
-        slug
-        message
-      }
-      page {
-        updatedAt
-      }
-}}}
-            ''',
+            "query": Q.UPDATE_PAGE,
         }
         # pprint(query)
         data = self.query_wikijs(query)
@@ -1157,21 +989,7 @@ mutation ($id: Int!, $content: String, $description: String, $editor: String, $i
             'variables': {
                 'query': query,
             },
-            'query': '''
-query ($query: String!) {
-  pages {
-    search(query: $query) {
-      results {
-        id
-        title
-        description
-        path
-        locale
-      }
-      suggestions
-      totalHits
-}}}
-        ''',
+            'query': Q.SEARCH,
         }
         data = self.query_wikijs(query)
         results = [PageSearchResult(**_) for _ in xpath(data, 'data/pages/search/results')]
@@ -1189,17 +1007,7 @@ query ($query: String!) {
 
     def tags(self) -> Iterator[Tag]:
         query = {
-            'query': '''
-{
-  pages {
-    tags {
-      id
-      tag
-      title
-      createdAt
-      updatedAt
-}}}
-''',
+            'query': Q.TAGS,
         }
         data = self.query_wikijs(query)
         for _ in xpath(data, 'data/pages/tags'):
@@ -1212,12 +1020,7 @@ query ($query: String!) {
             'variables': {
                 'query': query,
             },
-            'query': '''
-query ($query: String!) {
-  pages {
-    searchTags(query: $query)
-}}
-''',
+            'query': Q.SEARCH_TAGS,
         }
         data = self.query_wikijs(query)
         return xpath(data, 'data/pages/searchTags')
@@ -1229,16 +1032,7 @@ query ($query: String!) {
             'variables': {
                 'locale': 'fr',
             },
-            'query': '''
-query ($locale: String!) {
-  pages {
-    links(locale: $locale) {
-      id
-      path
-      title
-      links
-}}}
-''',
+            'query': Q.LINKS,
         }
         data = self.query_wikijs(query)
         # pprint(data)
