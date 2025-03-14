@@ -330,6 +330,7 @@ class BasePage:
         data += self.content.rstrip()
         # print(f'{file_path}')
         path.parent.mkdir(parents=True, exist_ok=True)
+        # if not path.exists():
         path.write_text(data, encoding='utf8')
         return path
 

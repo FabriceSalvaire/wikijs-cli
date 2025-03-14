@@ -47,6 +47,9 @@ from .WikiJsApi import Page, WikiJsApi, Node
 
 LINESEP = os.linesep
 
+# Fixme: ?
+#  from typing import NewType
+type CommandName = str
 type PagePath = str   # aka PurePosixPath
 type PageFolder = str   # aka PurePosixPath
 type AssetFolder = str   # aka PurePosixPath
@@ -149,6 +152,9 @@ class CustomCompleter(Completer):
         line = document.current_line.lstrip()
         line = re.sub(' +', ' ', line)
         number_of_parameters = line.count(' ')
+        command = None
+        right_word = None
+        parameter_type = None
         if number_of_parameters:
             # words = [_ for _ in line.split(' ') if _]
             # command = words[0]
@@ -156,18 +162,15 @@ class CustomCompleter(Completer):
             right_word = line[index+1:]
             index = line.find(' ')
             command = line[:index]
-            func = getattr(Cli, command)
-            signature = inspect.signature(func)
-            parameters = list(signature.parameters.values())
-            if len(parameters) > 1:
-                parameter = parameters[number_of_parameters]   # 0 is self
-                parameter_type = parameter.annotation.__name__
-            else:
-                parameter_type = None
-        else:
-            command = None
-            right_word = None
-            parameter_type = None
+            try:
+                func = getattr(Cli, command)
+                signature = inspect.signature(func)
+                parameters = list(signature.parameters.values())
+                if len(parameters) > 1:
+                    parameter = parameters[number_of_parameters]   # 0 is self
+                    parameter_type = parameter.annotation.__name__   # Fixme: case type alias ???
+            except AttributeError:
+                pass
         # print(f'Debug: "{command}" | "{right_word}" | {number_of_parameters} | {parameter_type}')
 
         separator = ' '
@@ -189,6 +192,8 @@ class CustomCompleter(Completer):
             match parameter_type:
                 case 'bool':
                     words = ('true', 'false')
+                case 'CommandName':
+                    words = self._commands
                 case 'FilePath':
                     # match command:
                     #     case 'create' | 'update':
@@ -380,13 +385,17 @@ class Cli:
 
     ##############################################
 
-    def help(self, command: str) -> None:
+    def help(self, command: CommandName) -> None:
         func = getattr(self, command)
         # help(func)
         self.print(f'<blue>{func.__doc__}</blue>')
         signature = inspect.signature(func)
         for _ in signature.parameters.values():
-            self.print(f'  <blue>{_.name}</blue>: <green>{_.annotation.__name__}</green>')
+            if _.default != inspect._empty:
+                default = f' = <orange>{_.default}</orange>'
+            else:
+                default = ''
+            self.print(f'  <blue>{_.name}</blue>: <green>{_.annotation.__name__}</green>{default}')
 
     ##############################################
 
@@ -427,11 +436,12 @@ class Cli:
 
     ##############################################
 
-    def dump(self, path: PagePath, output: FilePath = None) -> None:
+    def dump(self, path: PagePath, output: str = None) -> None:
         """dump a page"""
         path = self._absolut_path(path)
         page = self._api.page(path)   # locale=
         page.complete()
+        # Fixme: write dump on stdout
         _ = f"<green>{page.path}</green> @{page.locale}{LINESEP}"
         _ += f"  <blue>{page.title}</blue>{LINESEP}"
         _ += f"  {page.id}{LINESEP}"
