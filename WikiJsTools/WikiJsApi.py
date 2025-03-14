@@ -643,6 +643,17 @@ class WikiJsApi:
 
     ##############################################
 
+    def is_valid_path(self, path: str) -> bool:
+        # Space (use dashes instead)
+        # Period (reserved for file extensions)
+        # Unsafe URL characters (such as punctuation marks, quotes, math symbols, etc.)
+        for c in path:
+            if c in ' .,;!?&|+=*^~#%$@{}[]<>\\\'"':
+                return False
+        return True
+
+    ##############################################
+
     def query_wikijs(self, query: dict) -> dict:
         # print(f"API {query}")
         response = requests.post(f'{self._api_url}/graphql', json=query, headers=self._headers)
@@ -722,7 +733,6 @@ class WikiJsApi:
     ##############################################
 
     def list_pages(self, order_by: str = 'PATH', reverse: bool = False, limit: int = 0) -> Iterator[Page]:
-        # Query > PageQuery > PageListItem
         order_by_direction = 'DESC' if reverse else 'ASC'
         # Fixme: cannot pass PageOrderBy as string ???
         query = {
@@ -745,7 +755,6 @@ class WikiJsApi:
         """List the pages and folders in the parent of the page at `path`.
         When `includeAncestors` is True, the parent directories are also listed.
         """
-        # Query > PageQuery > PageTreeItem
         query = {
             'variables': {
                 'path': path,
@@ -801,7 +810,6 @@ class WikiJsApi:
         }
         data = self.query_wikijs(query)
         # pprint(data)
-        # {'data': {'pages': {'single': {'content':
         page.content = xpath(data, 'data/pages/single/content')
 
     ##############################################
@@ -888,7 +896,6 @@ class WikiJsApi:
                 'destinationPath': str(path),
                 'destinationLocale': locale,
             },
-            # __typename
             'query': Q.MOVE_PAGE,
         }
         # pprint(query)
