@@ -751,6 +751,20 @@ class WikiJsApi:
 
     ##############################################
 
+    def list_page_for_tags(self, tags: list[str], order_by: str = 'PATH', limit: int = 0) -> Iterator[Page]:
+        query = {
+            'variables': {
+                'tags': list(tags),
+                'limit': limit,
+            },
+            'query': Q.LIST_PAGE_FOR_TAGS(order_by),
+        }
+        data = self.query_wikijs(query)
+        for _ in xpath(data, 'data/pages/list'):
+            yield Page(api=self, **_)
+
+    ##############################################
+
     def tree(self, path: str = 'home') -> Iterator[Page]:
         """List the pages and folders in the parent of the page at `path`.
         When `includeAncestors` is True, the parent directories are also listed.

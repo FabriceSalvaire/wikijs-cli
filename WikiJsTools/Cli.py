@@ -399,7 +399,9 @@ class Cli:
 
     ##############################################
 
-    def list(self, complete: bool = False) -> None:
+    # list clashes with list[]
+
+    def pages(self, complete: bool = False) -> None:
         """List the pages"""
         complete = self._to_bool(complete)
         for page in self._api.list_pages():
@@ -411,10 +413,17 @@ class Cli:
 
     ##############################################
 
-    def listp(self, path: PagePath) -> None:
+    def with_path(self, path: PagePath) -> None:
         for page in self._api.list_pages():
             if path in page.path.lower():
                 self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> @{page.locale} {page.id:3}")
+
+    ##############################################
+
+    def with_tags(self, *tags: list[Tag]) -> None:
+        """List the pages"""
+        for page in self._api.list_page_for_tags(tags):
+            self.print(f"<green>{page.path_str:60}</green> <blue>{page.title:40}</blue> @{page.locale} {page.id:3}")
 
     ##############################################
 
