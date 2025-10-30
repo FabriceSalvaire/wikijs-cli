@@ -230,7 +230,7 @@ class BasePage:
         # Note: path is used to move page version
         if path is None:
             path = self.path
-        self.file_path_impl(dst, self.locale, path, self.contentType)
+        return self.file_path_impl(dst, self.locale, path, self.contentType)
 
     ##############################################
 
@@ -281,7 +281,6 @@ class BasePage:
 
     def sync(self, dst: Path | str, check_exists: bool = True) -> Path:
         file_path = self.file_path(dst)
-
         if check_exists:
             # Check updatedAt
             file_date = None
@@ -297,6 +296,8 @@ class BasePage:
                 # print(f'{self.path} | {old_date} vs {new_date}')
                 if file_date == self.updated_at:
                     return
+        self.write(file_path)
+        return file_path
 
     ##############################################
 

@@ -758,6 +758,7 @@ class Cli:
             file_path = page.sync(path)
             if file_path is not None:
                 print(f"Wrote {file_path}")
+            # else is up to date
             # i += 1
             # if i > 3:
             #    break
@@ -787,6 +788,7 @@ class Cli:
         json_versions = []
         last_version_date = None
         if created:
+            # Fixme: to func
             subprocess.run((self.GIT, 'init'), check=True)
         else:
             with open(self.HISTORY_JSON, 'r') as fh:
@@ -814,8 +816,11 @@ class Cli:
             print(f"{p} % done")
 
         # Fixme: skip ?
+        print("Get page histories...")
         history = self._api.history(progress_callback)
+        print("Done")
 
+        # Commit page history
         for page_history in history:
             if last_version_date is not None:
                 _ = datetime.fromisoformat(page_history.versionDate)
@@ -823,6 +828,7 @@ class Cli:
                     continue
 
             version = page_history.page_version
+            # Fixme: ???
             if 'content' in version.path:
                 pprint(page_history)
                 pprint(version)
@@ -832,8 +838,9 @@ class Cli:
                     print(f'{version.action} {version.path}')
                     file_path = version.sync('.', check_exists=False)
                     subprocess.run((self.GIT, 'add', file_path), check=True)
-                    commit(version, 'update')
+                    commit(version, f'update {file_path}')
                 case 'move':
+                    # Fixme: ???
                     if page_history.changed:
                         page = version.page
                         print(f'{version.action} {page.locale} {page_history.old_path} -> {page_history.new_path}')
@@ -845,20 +852,22 @@ class Cli:
                             new_path.parent.mkdir(parents=True, exist_ok=True)
                             # Fixme: remove old directory
                             subprocess.run((self.GIT, 'mv', old_path, new_path), check=True)
-                            # update file
+                            # update file content metadata
                             file_path = version.sync('.', check_exists=False)
                             subprocess.run((self.GIT, 'add', file_path), check=True)
-                            commit(version, 'move')
+                            # Fixme: is move and update possible ???
+                            commit(version, f'move {old_path} -> {new_path}')
                     else:
                         print(f'{version.action} unchanged')
                 case _:
                     raise NotImplementedError(f"Action {version.action}")
 
-        # Assets
+        # Save Assets
+        #  Wiki.js doesn't implement an history for assets
         # asset_path = sync_dir.joinpath('_assets')
         asset_path = Path('_assets')
         asset_path.mkdir(parents=True, exist_ok=True)
-        # Collect current asset list
+        # Collect current asset list on disk
         paths = []
         for dirpath, dirnames, filenames in asset_path.walk():
             dirpath = Path(dirpath)
@@ -878,10 +887,11 @@ class Cli:
         for asset in process_folder():
             data = self._api.get(asset.path)
             path = asset_path.joinpath(asset.path)   # .split('/')
-            paths.remove(path)
+            if path in paths:
+                paths.remove(path)
             # asset.created_at.timestamp()
             mtime = asset.updated_at.timestamp()
-            if not (path.exists() or path.stat().st_mtime == mtime):
+            if not (path.exists() and path.stat().st_mtime == mtime):
                 print(f"Write {asset.path}")
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(data)
