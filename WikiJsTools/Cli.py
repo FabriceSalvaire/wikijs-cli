@@ -244,6 +244,27 @@ class Cli:
 
     ##############################################
 
+    @staticmethod
+    def _to_bool(value: str) -> bool:
+        if isinstance(value, bool):
+            return value
+        match str(value).lower():
+            case 'true' | 't':
+                return True
+            case _:
+                return False
+
+    ##############################################
+
+    @classmethod
+    def _fix_extension(self, filename: str, content_type: str = 'markdown') -> Path:
+        extension = Page.extension_for(content_type)
+        if not filename.endswith(extension):
+            filename += extension
+        return Path(filename)
+
+    ############################################################################
+
     def __init__(self, api: WikiJsApi) -> None:
         self._api = api
         self.COMMANDS = [
@@ -258,18 +279,6 @@ class Cli:
         self._current_path = None
         self._asset_tree = None
         self._current_asset_folder = None
-
-    ##############################################
-
-    @staticmethod
-    def _to_bool(value: str) -> bool:
-        if isinstance(value, bool):
-            return value
-        match str(value).lower():
-            case 'true' | 't':
-                return True
-            case _:
-                return False
 
     ##############################################
 
@@ -356,11 +365,21 @@ class Cli:
 
     ##############################################
 
+    def _absolut_path(self, path: str) -> PurePosixPath:
+        if not path.startswith('/') and self._current_path:
+            path = self._current_path.join(path)
+        return PurePosixPath(path)
+
+    ############################################################################
+
     def clear(self) -> None:
         """Clear the console"""
         shortcuts.clear()
 
-    ##############################################
+    ############################################################################
+    #
+    # Help
+    #
 
     def usage(self) -> None:
         """Show usage"""
@@ -388,13 +407,6 @@ class Cli:
 
     ##############################################
 
-    def _absolut_path(self, path: str) -> PurePosixPath:
-        if not path.startswith('/') and self._current_path:
-            path = self._current_path.join(path)
-        return PurePosixPath(path)
-
-    ##############################################
-
     def _help(self, command: CommandName = None, show_parameters: bool = False) -> None:
         func = getattr(self, command)
         # help(func)
@@ -417,7 +429,84 @@ class Cli:
         else:
             self._help(command, show_parameters=True)
 
+    ############################################################################
+    #
+    # Reset
+    #
+
+    def reset(self) -> None:
+        """Reset page and folder tree"""
+        self._page_tree = self._api.build_page_tree(ProgressBar)
+        self._asset_tree = self._api.build_asset_tree()
+        self._current_path = self._page_tree
+        self._current_asset_folder = self._asset_tree
+        # reset current_path ?
+
+    def _init(self) -> None:
+        if self._page_tree is None:
+            self.reset()
+
+    ############################################################################
+
+    def emc(self, dst: FilePath) -> None:
+        """Open a file in Emacs"""
+        dst = self._fix_extension(dst)
+        subprocess.Popen(('/usr/bin/emacsclient', dst), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    ############################################################################
+    #
+    # CD
+    #
+
+    def cd(self, path: PageFolder) -> None:
+        """Change the current path"""
+        self._init()
+        if path == '..':
+            if not self._current_path.is_root:
+                self._current_path = self._current_path.parent
+        else:
+            if path.startswith('/'):
+                _ = self._page_tree.find(path[1:])
+            else:
+                _ = self._current_path.find(path)
+            if _.is_leaf:
+                self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
+            else:
+                self._current_path = _
+        self.print(f"<red>moved to</red> <blue>{self._current_path.path}</blue>")
+
     ##############################################
+
+    def cda(self, path: AssetFolder) -> None:
+        """Change the current asset folder"""
+        self._init()
+        if path == '..':
+            if not self._current_asset_folder.is_root:
+                self._current_asset_folder = self._current_asset_folder.parent
+        else:
+            _ = self._current_asset_folder.find(path)
+            if _.is_leaf:
+                self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
+            self._current_asset_folder = _
+        self.print(f"<red>moved to</red> <blue>{self._current_asset_folder.path}</blue>")
+
+        # try:
+        #     self._current_asset_folder = self._asset_folders[path]
+        #     self.print(f"<red>moved to</red> <blue>{path}</blue>")
+        # except KeyError:
+        #     self.print(f"<red>Error:</red> <blue>{path}</blue> <red>not found</red>")
+
+    ##############################################
+
+    def cwd(self) -> None:
+        """Show current working directry"""
+        self.print(f"<blue>Current path</blue> <green>{self._current_path.path}</green>")
+        self.print(f"<blue>Current asset path</blue> <green>{self._current_asset_folder}</green>")
+
+    ############################################################################
+    #
+    # Page Tree
+    #
 
     # list clashes with list[]
 
@@ -450,6 +539,17 @@ class Cli:
 
     ##############################################
 
+    def search(self, query: str) -> None:
+        """Search page"""
+        response = self._api.search(query)
+        if response.suggestions:
+            _ = ', '.join(response.suggestions)
+            self.print(f'Suggestions: <blue>{_}</blue>')
+        for _ in response.results:
+            self.print(f'<blue>{_.path:60}</blue> <green>{_.title}</green>')
+
+    ##############################################
+
     def last(self) -> None:
         """List the last updated pages"""
         for page in self._api.list_pages(order_by='UPDATED', reverse=True, limit=10):
@@ -465,6 +565,58 @@ class Cli:
             is_folder = '/' if page.isFolder else ''
             path = f"{page.path_str}{is_folder}"
             self.print(f"<green>{path:60}</green> <blue>{page.title:40}</blue>")
+
+    ##############################################
+
+    def ls(self) -> None:
+        """List the current path"""
+        self._init()
+        self.print(f"<red>CWD</red> <blue>{self._current_path.path}</blue>")
+        # for _ in self._current_path.folder_childs:
+        #     self.print(f"  {_.name}")
+        for _ in self._current_path.childs:
+            if _.is_folder:
+                self.print(f"  <green>{_.name} /</green>")
+            else:
+                self.print(f"  <blue>{_.name}</blue> : <orange>{_.page.title}</orange>")
+
+    ############################################################################
+    #
+    # Page
+    #
+
+    ##############################################
+
+    def template(self, dst: FilePath, path: PagePath = None, locale: str = 'fr', content_type: str = 'markdown') -> None:
+        """Write a page template"""
+        dst = self._fix_extension(dst)
+        if self._current_path:
+            if path is None:
+                path = dst.stem
+            path = self._current_path.join(path)
+            self.print(f"<red>Path is</red> <blue>{path}</blue>")
+        elif path is None:
+            self.print("<red>path is required</red>")
+
+        if Page.template(dst, locale, path, content_type) is None:
+            self.print(f"<red>Error: file exists</red>")
+        else:
+            self.print(f"<red>Wrote</red>  <blue>{dst}</blue>")
+
+    ##############################################
+
+    def create(self, input: FilePath) -> None:
+        """Create a new page"""
+        input = self._fix_extension(input)
+        page = Page.read(input, self._api)
+        if page.title is None:
+            self.print(f"<red>Error: missing title</red>")
+            return
+        _ = f"<green>{page.path_str}</green> @{page.locale}{LINESEP}"
+        _ += f"  <blue>{page.title}</blue>{LINESEP}"
+        self.print(_)
+        response = self._api.create_page(page)
+        self.print(f"<red>{response.message}</red>")
 
     ##############################################
 
@@ -494,150 +646,12 @@ class Cli:
 
     ##############################################
 
-    def reset(self) -> None:
-        """Reset page and folder tree"""
-        self._page_tree = self._api.build_page_tree(ProgressBar)
-        self._asset_tree = self._api.build_asset_tree()
-        self._current_path = self._page_tree
-        self._current_asset_folder = self._asset_tree
-        # reset current_path ?
-
-    def _init(self) -> None:
-        if self._page_tree is None:
-            self.reset()
-
-    ##############################################
-
-    def ls(self) -> None:
-        """List the current path"""
-        self._init()
-        self.print(f"<red>CWD</red> <blue>{self._current_path.path}</blue>")
-        # for _ in self._current_path.folder_childs:
-        #     self.print(f"  {_.name}")
-        for _ in self._current_path.childs:
-            if _.is_folder:
-                self.print(f"  <green>{_.name} /</green>")
-            else:
-                self.print(f"  <blue>{_.name}</blue> : <orange>{_.page.title}</orange>")
-
-    ##############################################
-
-    def cd(self, path: PageFolder) -> None:
-        """Change the current path"""
-        self._init()
-        if path == '..':
-            if not self._current_path.is_root:
-                self._current_path = self._current_path.parent
-        else:
-            if path.startswith('/'):
-                _ = self._page_tree.find(path[1:])
-            else:
-                _ = self._current_path.find(path)
-            if _.is_leaf:
-                self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
-            else:
-                self._current_path = _
-        self.print(f"<red>moved to</red> <blue>{self._current_path.path}</blue>")
-
-    ##############################################
-
-    def lsa(self) -> None:
-        """List the current asset folder"""
-        self._init()
-        self.print(f"<red>CWD</red> <blue>{self._current_asset_folder.path}</blue>")
-        # for _ in self._current_path.folder_childs:
-        #     self.print(f"  {_.name}")
-        for _ in self._current_asset_folder.childs:
-            if _.is_folder:
-                self.print(f"  <green>{_.name} /</green>")
-            else:
-                self.print(f"  <blue>{_.name}</blue>")
-
-    ##############################################
-
-    def cda(self, path: AssetFolder) -> None:
-        """Change the current asset folder"""
-        self._init()
-        if path == '..':
-            if not self._current_asset_folder.is_root:
-                self._current_asset_folder = self._current_asset_folder.parent
-        else:
-            _ = self._current_asset_folder.find(path)
-            if _.is_leaf:
-                self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
-            self._current_asset_folder = _
-        self.print(f"<red>moved to</red> <blue>{self._current_asset_folder.path}</blue>")
-
-        # try:
-        #     self._current_asset_folder = self._asset_folders[path]
-        #     self.print(f"<red>moved to</red> <blue>{path}</blue>")
-        # except KeyError:
-        #     self.print(f"<red>Error:</red> <blue>{path}</blue> <red>not found</red>")
-
-    ##############################################
-
-    def cwd(self) -> None:
-        """Show current working directry"""
-        self.print(f"<blue>Current path</blue> <green>{self._current_path.path}</green>")
-        self.print(f"<blue>Current asset path</blue> <green>{self._current_asset_folder}</green>")
-
-    ##############################################
-
-    @classmethod
-    def _fix_extension(self, filename: str, content_type: str = 'markdown') -> Path:
-        extension = Page.extension_for(content_type)
-        if not filename.endswith(extension):
-            filename += extension
-        return Path(filename)
-
-    ##############################################
-
-    def template(self, dst: FilePath, path: PagePath = None, locale: str = 'fr', content_type: str = 'markdown') -> None:
-        """Write a page template"""
-        dst = self._fix_extension(dst)
-        if self._current_path:
-            if path is None:
-                path = dst.stem
-            path = self._current_path.join(path)
-            self.print(f"<red>Path is</red> <blue>{path}</blue>")
-        elif path is None:
-            self.print("<red>path is required</red>")
-
-        if Page.template(dst, locale, path, content_type) is None:
-            self.print(f"<red>Error: file exists</red>")
-        else:
-            self.print(f"<red>Wrote</red>  <blue>{dst}</blue>")
-
-    ##############################################
-
-    def emc(self, dst: FilePath) -> None:
-        """Open a file in Emacs"""
-        dst = self._fix_extension(dst)
-        subprocess.Popen(('/usr/bin/emacsclient', dst), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    ##############################################
-
     def open(self, path: PagePath, locale: str = 'fr') -> None:
         """Open a page in the browser"""
         path = self._absolut_path(path)
         url = f'{self._api.api_url}/{locale}/{path}'
         self.print(f"<red>Open</red>  <blue>{url}</blue>")
         subprocess.Popen(('/usr/bin/xdg-open', url), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    ##############################################
-
-    def create(self, input: FilePath) -> None:
-        """Create a new page"""
-        input = self._fix_extension(input)
-        page = Page.read(input, self._api)
-        if page.title is None:
-            self.print(f"<red>Error: missing title</red>")
-            return
-        _ = f"<green>{page.path_str}</green> @{page.locale}{LINESEP}"
-        _ += f"  <blue>{page.title}</blue>{LINESEP}"
-        self.print(_)
-        response = self._api.create_page(page)
-        self.print(f"<red>{response.message}</red>")
 
     ##############################################
 
@@ -721,6 +735,40 @@ class Cli:
         """Rename a page"""
         self._move_impl(path, new_path, rename=True, dryrun=dryrun)
 
+    ############################################################################
+    #
+    # Tags
+    #
+
+    def tags(self) -> None:
+        """List the tags"""
+        for _ in self._api.tags():
+            self.print(f'<blue>{_.tag:30}</blue> <green>{_.title}</green>')
+
+    ##############################################
+
+    def search_tags(self, query: str) -> None:
+        """Search the tags"""
+        for _ in self._api.search_tags(query):
+            self.print(f'<blue>{_}</blue>')
+
+    ############################################################################
+    #
+    # Asset
+    #
+
+    def lsa(self) -> None:
+        """List the current asset folder"""
+        self._init()
+        self.print(f"<red>CWD</red> <blue>{self._current_asset_folder.path}</blue>")
+        # for _ in self._current_path.folder_childs:
+        #     self.print(f"  {_.name}")
+        for _ in self._current_asset_folder.childs:
+            if _.is_folder:
+                self.print(f"  <green>{_.name} /</green>")
+            else:
+                self.print(f"  <blue>{_.name}</blue>")
+
     ##############################################
 
     def asset(self, show_files: bool = True, show_folder_path: bool = False) -> None:
@@ -759,18 +807,10 @@ class Cli:
         else:
             self.print(f"<red>Error: run cd_asset before</red>")
 
-    ##############################################
-
-    def search(self, query: str) -> None:
-        """Search page"""
-        response = self._api.search(query)
-        if response.suggestions:
-            _ = ', '.join(response.suggestions)
-            self.print(f'Suggestions: <blue>{_}</blue>')
-        for _ in response.results:
-            self.print(f'<blue>{_.path:60}</blue> <green>{_.title}</green>')
-
-    ##############################################
+    ############################################################################
+    #
+    # Sync
+    #
 
     def sync(self, path: Path = None) -> None:
         """Sync on disk"""
@@ -950,7 +990,10 @@ class Cli:
             # }
             json.dump(json_versions, fh, ensure_ascii=False, indent=4)
 
-    ##############################################
+    ############################################################################
+    #
+    # Check
+    #
 
     def check(self) -> None:
         """Check pages"""
@@ -997,22 +1040,8 @@ class Cli:
 
     ##############################################
 
-    def tags(self) -> None:
-        """List the tags"""
-        for _ in self._api.tags():
-            self.print(f'<blue>{_.tag:30}</blue> <green>{_.title}</green>')
-
-    ##############################################
-
-    def search_tags(self, query: str) -> None:
-        """Search the tags"""
-        for _ in self._api.search_tags(query):
-            self.print(f'<blue>{_}</blue>')
-
-    ##############################################
-
     def links(self) -> None:
-        """List tha page links"""
+        """List the page links"""
         pages = list(self._api.links())
         pages.sort(key=lambda _: _.path)
         for page in pages:
