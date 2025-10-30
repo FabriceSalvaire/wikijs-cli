@@ -8,9 +8,12 @@
 #
 ####################################################################################################
 
+__all__ = ['main']
+
 ####################################################################################################
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from yaml import load
 from yaml import Loader
@@ -27,10 +30,16 @@ class Config:
 
 ####################################################################################################
 
-with open('config.yaml') as fh:
-    _ = load(fh, Loader=Loader)
-    config = Config(**_)
+def load_config(path: Path | str) -> Config:
+    with open(path) as fh:
+        _ = load(fh, Loader=Loader)
+    return Config(**_)
 
-api = WikiJsApi(api_url=config.API_URL, api_key=config.API_KEY)
-cli = Cli(api)
-cli.cli(query='')
+####################################################################################################
+
+def main():
+    CONFIG_PATH = Path('~/.config/wikijs-cli/config.yaml').expanduser()
+    config = load_config(CONFIG_PATH)
+    api = WikiJsApi(api_url=config.API_URL, api_key=config.API_KEY)
+    cli = Cli(api)
+    cli.cli(query='')

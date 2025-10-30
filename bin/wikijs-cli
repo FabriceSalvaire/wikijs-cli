@@ -1,0 +1,12 @@
+#! /usr/bin/env python3
+
+####################################################################################################
+#
+# wikijs-cli - A CLI for Wiki.js
+# Copyright (C) 2025 Fabrice SALVAIRE
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+####################################################################################################
+
+from WikiJsTools.scripts.cli import main
+main()
