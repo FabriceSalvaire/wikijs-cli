@@ -6,6 +6,8 @@
 #
 ####################################################################################################
 
+__all__ = ['ApiError', 'WikiJsApi', 'Node', 'Page']
+
 # Fime: use PurePosixPath
 
 ####################################################################################################
@@ -627,6 +629,11 @@ def xpath(data: dict, path: str) -> dict:
 
 ####################################################################################################
 
+class ApiError(NameError):
+    pass
+
+####################################################################################################
+
 class WikiJsApi:
 
     ##############################################
@@ -666,8 +673,8 @@ class WikiJsApi:
             raise NameError(f"Error {response}")
         data = response.json()
         if 'errors' in data:
-            pprint(data)
-            raise NameError
+            # pprint(data)
+            raise ApiError(data['errors'][0]['message'])
         else:
             return data
 

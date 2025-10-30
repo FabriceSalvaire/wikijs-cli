@@ -39,7 +39,7 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.shortcuts import ProgressBar
 from prompt_toolkit.styles import Style
 
-from .WikiJsApi import Page, WikiJsApi, Node
+from .WikiJsApi import WikiJsApi, ApiError, Node, Page
 
 ####################################################################################################
 
@@ -287,8 +287,12 @@ class Cli:
             try:
                 method(*argument)
             except Exception as e:
-                print(traceback.format_exc())
-                print(e)
+                match e:
+                    case ApiError():
+                        self.print(f'API error: <red>{e}</red>')
+                    case _:
+                        print(traceback.format_exc())
+                        print(e)
         except AttributeError:
             self.print(f"<red>Invalid command</red> <blue>{query}</blue>")
             self.usage()
