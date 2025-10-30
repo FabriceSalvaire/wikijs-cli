@@ -351,11 +351,13 @@ class Cli:
     ##############################################
 
     def clear(self) -> None:
+        """Clear the console"""
         shortcuts.clear()
 
     ##############################################
 
     def usage(self) -> None:
+        """Show usage"""
         for _ in (
             "<red>Enter</red>: <blue>command argument</blue>",
             "    or <blue>command1 argument; command2 argument; ...</blue>",
@@ -387,17 +389,27 @@ class Cli:
 
     ##############################################
 
-    def help(self, command: CommandName) -> None:
+    def _help(self, command: CommandName = None, show_parameters: bool = False) -> None:
         func = getattr(self, command)
         # help(func)
-        self.print(f'<blue>{func.__doc__}</blue>')
-        signature = inspect.signature(func)
-        for _ in signature.parameters.values():
-            if _.default != inspect._empty:
-                default = f' = <orange>{_.default}</orange>'
-            else:
-                default = ''
-            self.print(f'  <blue>{_.name}</blue>: <green>{_.annotation.__name__}</green>{default}')
+        self.print(f'<green>{command:16}</green> <blue>{func.__doc__ or ''}</blue>')
+        if show_parameters:
+            signature = inspect.signature(func)
+            for _ in signature.parameters.values():
+                if _.default != inspect._empty:
+                    default = f' = <orange>{_.default}</orange>'
+                else:
+                    default = ''
+                self.print(f'  <blue>{_.name}</blue>: <green>{_.annotation.__name__}</green>{default}')
+
+
+    def help(self, command: CommandName = None) -> None:
+        """Show command help"""
+        if command is None:
+            for command in self.COMMANDS:
+                self._help(command)
+        else:
+            self._help(command, show_parameters=True)
 
     ##############################################
 
@@ -416,6 +428,7 @@ class Cli:
     ##############################################
 
     def with_path(self, path: PagePath) -> None:
+        """List the pages matching a path pattern"""
         for page in self._api.list_pages():
             if path in page.path.lower():
                 self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue> @{page.locale} {page.id:3}")
@@ -587,12 +600,14 @@ class Cli:
     ##############################################
 
     def emc(self, dst: FilePath) -> None:
+        """Open a file in Emacs"""
         dst = self._fix_extension(dst)
         subprocess.Popen(('/usr/bin/emacsclient', dst), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     ##############################################
 
     def open(self, path: PagePath, locale: str = 'fr') -> None:
+        """Open a page in the browser"""
         path = self._absolut_path(path)
         url = f'{self._api.api_url}/{locale}/{path}'
         self.print(f"<red>Open</red>  <blue>{url}</blue>")
