@@ -176,7 +176,9 @@ class CustomCompleter(Completer):
 
         separator = ' '
 
-        def handle_cd(current_path, path, folder: bool):
+        def handle_cd(root_path, current_path, path, folder: bool):
+            if right_word.startswith('/'):
+                current_path = root_path
             cwd = current_path.find(path)
             if '/' in path:
                 nonlocal separator
@@ -202,11 +204,11 @@ class CustomCompleter(Completer):
                     filenames = sorted(cwd.glob('*.md'))
                     words = [_.name for _ in filenames]
                 case 'PagePath':
-                    words = handle_cd(self._cli._current_path, right_word, folder=False)
+                    words = handle_cd(self._cli._page_tree, self._cli._current_path, right_word, folder=False)
                 case 'PageFolder':
-                    words = handle_cd(self._cli._current_path, right_word, folder=True)
+                    words = handle_cd(self._cli._page_tree, self._cli._current_path, right_word, folder=True)
                 case 'AssetFolder':
-                    words = handle_cd(self._cli._current_asset_folder, right_word, folder=True)
+                    words = handle_cd(self._cli._asset_tree, self._cli._current_asset_folder, right_word, folder=True)
                 case 'Tag':
                     # Fixme: 'list[Tag]' type is list
                     # Fixme: tag can have space !
@@ -522,10 +524,14 @@ class Cli:
             if not self._current_path.is_root:
                 self._current_path = self._current_path.parent
         else:
-            _ = self._current_path.find(path)
+            if path.startswith('/'):
+                _ = self._page_tree.find(path[1:])
+            else:
+                _ = self._current_path.find(path)
             if _.is_leaf:
                 self.print(f"<red>Error: </red> <blue>{path}</blue> <red>is not a folder</red>")
-            self._current_path = _
+            else:
+                self._current_path = _
         self.print(f"<red>moved to</red> <blue>{self._current_path.path}</blue>")
 
     ##############################################
