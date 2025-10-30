@@ -1,5 +1,8 @@
 *~
 __pycache__/
+.pycache/
+
+__TRASH__/
 
 # SECRET
 config.yaml
@@ -10,5 +13,18 @@ resources/
 cli_history
 review.json
 
-notes/wikijs.sh
+dev-test/
+
+notes/NOTES-JS.md
+notes/notes.md
 notes/query-example.md
+notes/upload.md
+notes/wikijs.sh
+
+TODO-2025.md
+TODO.md
+
+setenv.sh
+setup.cfg
+setup.py
+setup_data.py
