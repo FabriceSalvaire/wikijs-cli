@@ -484,7 +484,8 @@ class Cli:
         else:
             rule = '\u2500' * 100
             print(rule)
-            print(page.content)
+            # print(page.content)
+            print(page.export())
             print(rule)
 
     ##############################################

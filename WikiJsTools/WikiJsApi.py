@@ -301,9 +301,7 @@ class BasePage:
 
     ##############################################
 
-    def write(self, dst: Path | str) -> Path:
-        path = Path(dst)
-
+    def export(self) -> str:
         data = ''
         # data += self.RULE + os.linesep
         for field in (
@@ -331,7 +329,13 @@ class BasePage:
                 pass
         data += self.RULE + os.linesep
         data += self.content.rstrip()
-        # print(f'{file_path}')
+        return data
+
+    ##############################################
+
+    def write(self, dst: Path | str) -> Path:
+        path = Path(dst)
+        data = self.export()
         path.parent.mkdir(parents=True, exist_ok=True)
         # if not path.exists():
         path.write_text(data, encoding='utf8')
