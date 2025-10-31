@@ -89,11 +89,11 @@ class Node:
 
     @property
     def folder_names(self) -> list[str]:
-        return [_.name for _ in self.folder_childs]
+        return usorted([_.name for _ in self.folder_childs])
 
     @property
     def leaf_names(self) -> list[str]:
-        return [_.name for _ in self.leaf_childs]
+        return usorted([_.name for _ in self.leaf_childs])
 
     ##############################################
 
