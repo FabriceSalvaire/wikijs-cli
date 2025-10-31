@@ -22,4 +22,4 @@ def usorted(iter: list, key: str = None) -> list:
     if key is not None:
         return sorted(iter, key=lambda _: collator.getSortKey(getattr(_, key)))
     else:
-        return sorted(iter, key=lambda _: collator.getSortKey)
+        return sorted(iter, key=collator.getSortKey)
