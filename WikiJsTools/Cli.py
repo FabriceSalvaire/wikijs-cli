@@ -38,6 +38,7 @@ from prompt_toolkit.shortcuts import ProgressBar
 from prompt_toolkit.styles import Style
 
 from .WikiJsApi import WikiJsApi, ApiError, Node, Page
+from .printer import STYLE, printc
 from .sync import sync, git_sync
 from .unicode import usorted
 
@@ -220,24 +221,6 @@ class CustomCompleter(Completer):
 class Cli:
 
     CLI_HISTORY = Path('cli_history')
- 
-    STYLE = Style.from_dict({
-        # User input (default text)
-        # '': '#000000',
-        '': '#ffffff',
-        # Prompt
-        'prompt': '#ff0000',
-        # Output
-        # 'red': '#ff0000',
-        # 'green': '#00ff00',
-        # 'blue': '#0000ff',
-        'red': '#ed1414',
-        'green': '#10cf15',
-        'blue': '#1b99f3',
-        'orange': '#f57300',
-        'violet': '#9b58b5',
-        'greenblue': '#19bb9c',
-    })
 
     ##############################################
 
@@ -337,7 +320,7 @@ class Cli:
                 ]
                 query = session.prompt(
                     message,
-                    style=self.STYLE,
+                    style=STYLE,
                 )
             except KeyboardInterrupt:
                 continue
@@ -353,12 +336,7 @@ class Cli:
     ##############################################
 
     def print(self, message: str = '') -> None:
-        if message:
-            message = HTML(message)
-        print_formatted_text(
-            message,
-            style=self.STYLE,
-        )
+        printc(message)
 
     ##############################################
 
