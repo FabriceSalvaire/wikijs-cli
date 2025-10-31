@@ -12,14 +12,12 @@ __all__ = ['Cli']
 
 ####################################################################################################
 
-from datetime import datetime
 from pathlib import Path, PurePosixPath
 from pprint import pprint
 from typing import Iterable
 import difflib
 import html
 import inspect
-import json
 # import logging
 import os
 import re
@@ -35,7 +33,6 @@ from prompt_toolkit.document import Document
 # from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.shortcuts import ProgressBar
-from prompt_toolkit.styles import Style
 
 from .WikiJsApi import WikiJsApi, ApiError, Node, Page
 from . import config
@@ -324,8 +321,8 @@ class Cli:
                     message,
                     style=STYLE,
                 )
-            except KeyboardInterrupt:
-                continue
+            # except KeyboardInterrupt:
+            #     continue
             except EOFError:
                 break
             else:
@@ -492,7 +489,7 @@ class Cli:
         complete = self._to_bool(complete)
         for page in self._api.list_pages():
             if complete:
-                page.complete()
+                # page.complete()
                 self.print(f"<green>{page.path_str:60}</green> <blue>{page.title:40}</blue> {len(page.content):5} @{page.locale} {page.id:3}")
             else:
                 self.print(f"<green>{page.path_str:60}</green> <blue>{page.title:40}</blue> @{page.locale} {page.id:3}")
@@ -600,7 +597,7 @@ class Cli:
         """dump a page"""
         path = self._absolut_path(path)
         page = self._api.page(path)   # locale=
-        page.complete()
+        # page.complete()
         # Fixme: write dump on stdout
         _ = f"<green>{page.path_str}</green> @{page.locale}{LINESEP}"
         _ += f"  <blue>{page.title}</blue>{LINESEP}"
@@ -634,7 +631,11 @@ class Cli:
     def history(self, path: PagePath) -> None:
         """Show page history"""
         def date2str(date):
-            return date.strftime('%Y/%m/%d %H:%M:%S')
+            from dateutil import tz
+            # from_zone = tz.tzutc()
+            to_zone = tz.tzlocal()
+            _ = date.astimezone(to_zone)
+            return _.strftime('%Y/%m/%d %H:%M:%S')
 
         path = self._absolut_path(path)
         page = self._api.page(path)   # locale=
@@ -644,9 +645,30 @@ class Cli:
         # print(f"{number_of_versions+1:4} {date2str(page.updated_at)}")
         for i, ph in enumerate(history):
             # {ph.actionType}
-            print(f"{number_of_versions-i:4} {date2str(ph.date)}")
-            if ph.actionType == 'move':
-                print(' '*10 + f'{ph.old_path} -> {ph.new_path}')
+            action = []
+            if ph.is_initial:
+                action.append('initial')
+            elif ph.is_edited:
+                action.append('edited')
+            moved = ph.is_moved
+            if moved:
+                action.append('moved')
+            action = ' '.join(action)
+            print(f"{number_of_versions-i:4} {date2str(ph.date)} {action}")
+            if moved:
+                old_path, new_path = moved
+                print(' '*10 + f'{old_path} -> {new_path}')
+            # print(f"      {ph.actionType} : {ph.valueBefore} -> {ph.valueAfter}")
+            # pv = ph.page_version
+            # if pv is not None:
+            #     print(f"      {pv.action}")
+            #     if pv.action == 'moved':
+            #         next = ph.next
+            #         if next.is_current:
+            #             new_path = page.path
+            #         else:
+            #             new_path = next.page_version.path
+            #         print(f"      {pv.path} -> {new_path}")
 
     ##############################################
 
@@ -654,7 +676,7 @@ class Cli:
         """Diff a page"""
         file_page = Page.read(input, self._api)
         wiki_page = file_page.reload()
-        wiki_page.complete()
+        # wiki_page.complete()
         self.print(f"<red>Wiki:</red> <blue>{wiki_page.updated_at}</blue>")
         self.print(f"<red>File:</red> <blue>{file_page.updated_at}</blue>")
         for _ in difflib.unified_diff(
@@ -833,7 +855,7 @@ class Cli:
         page_paths = [_.path for _ in pages]
         for page in pages:
             # print(f"Checking {page.path_str}")
-            page.complete()
+            # page.complete()
             dead_links = []
             for line in page.content.splitlines():
                 start = 0

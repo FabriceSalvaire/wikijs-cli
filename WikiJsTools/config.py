@@ -27,6 +27,9 @@ CONFIG_PATH = Path('~/.config/wikijs-cli').expanduser()
 CONFIG_YAML_PATH = CONFIG_PATH.joinpath('config.yaml')
 CLI_HISTORY_PATH = CONFIG_PATH.joinpath('cli_history')
 
+# DEBUG = True
+DEBUG = False
+
 ####################################################################################################
 
 @dataclass

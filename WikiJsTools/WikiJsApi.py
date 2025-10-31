@@ -18,11 +18,14 @@ from typing import Iterator
 from pathlib import Path, PurePosixPath
 from pprint import pprint
 import os
+import re
 
 import requests
 
+from . import config
 from . import query as Q
 from .node import Node
+from .printer import printc
 
 ####################################################################################################
 
@@ -292,8 +295,8 @@ class Page(BasePage):
     # authorEmail: str
     # creatorEmail: str
 
-    # Fixme: automatic complete
-    content: str = None
+    # see property
+    # content: str = None
 
     # hash: str
     # render: str
@@ -309,9 +312,11 @@ class Page(BasePage):
 
     ##############################################
 
-    def complete(self) -> None:
-        # if 'content' not in self.__dict__:
-        self.api.complete_page(self)
+    @property
+    def content(self) -> None:
+        if '_content' not in self.__dict__:
+            self.api.complete_page(self)
+        return self._content
 
     @property
     def history(self) -> list['PageHistory']:
@@ -328,6 +333,12 @@ class Page(BasePage):
             )
             history = [current]
             history += self.api.page_history(self)
+            number_of_versions = len(history)
+            for i in range(number_of_versions):
+                if i + 1 < number_of_versions:
+                    history[i].prev = history[i+1]
+                if i > 0:
+                    history[i].next = history[i-1]
             self._history = history
             # self._history_map = {_.versionId: _ for _ in self._history}
         return self._history
@@ -386,20 +397,20 @@ class PageVersion(BasePage):
 
     ##############################################
 
-    @property
-    def prev(self) -> 'PageVersion':
-        print(f"prev for {self.versionId}")
-        for i, _ in enumerate(self.page.history):
-            # print(f"{i} {_}")
-            if _.versionId == self.versionId:
-                break
-        try:
-            _ = self.page.history[i+1]
-            # print(f"{i+1} {_}")
-            # print(f"{_.versionId} -> {self.versionId}")
-            return _.page_version
-        except IndexError:
-            return None
+    # @property
+    # def prev(self) -> 'PageVersion':
+    #     # print(f"prev for {self.versionId}")
+    #     for i, _ in enumerate(self.page.history):
+    #         # print(f"{i} {_}")
+    #         if _.versionId == self.versionId:
+    #             break
+    #     try:
+    #         _ = self.page.history[i+1]
+    #         # print(f"{i+1} {_}")
+    #         # print(f"{_.versionId} -> {self.versionId}")
+    #         return _.page_version
+    #     except IndexError:
+    #         return None
 
     # @property
     # def old_path(self) -> str:
@@ -423,12 +434,20 @@ class PageHistory:
     valueBefore: str = None  # aka old path
     valueAfter: str = None   # aka move path
 
+    prev: 'PageHistory' = None
+    next: 'PageHistory' = None
+
     ##############################################
 
     @property
     def is_current(self) -> bool:
         # Fixme: could be updated on server
-        return self.versionDate == self.page.updatedAt
+        # return self.versionDate == self.page.updatedAt
+        return self.versionId is None
+
+    @property
+    def is_initial(self) -> bool:
+        return self.prev is None
 
     @property
     def page_version(self) -> PageVersion:
@@ -453,6 +472,29 @@ class PageHistory:
     @property
     def new_path(self) -> str:
         return self.valueAfter
+
+    @property
+    def is_edited(self) -> bool:
+        if self.is_current:
+            return self.page.content != self.prev.page_version.content
+        elif self.prev is not None:
+            return self.page_version.content != self.prev.page_version.content
+        return False
+
+    @property
+    def is_moved(self) -> bool | tuple[str, str]:
+        if self.actionType == 'moved':
+            return (self.valueBefore, self.valueAfter)
+        pv = self.page_version
+        if pv is not None and pv.action == 'moved':
+            old_path = pv.path
+            next = self.next
+            if next.is_current:
+                new_path = self.page.path
+            else:
+                new_path = next.page_version.path
+            return (old_path, new_path)
+        return False
 
 ####################################################################################################
 
@@ -577,7 +619,12 @@ class WikiJsApi:
     ##############################################
 
     def query_wikijs(self, query: dict) -> dict:
-        # print(f"API {query}")
+        if config.DEBUG:
+            variables = query.get('variables', '')
+            query_str = query['query'].replace('\n', '')
+            query_str = re.sub(' +', ' ', query_str)
+            query_str = re.sub('([a-z])}', r'\1 }', query_str)
+            printc(f"<blue>API Query:</blue> {query_str} {variables}")
         response = requests.post(f'{self._api_url}/graphql', json=query, headers=self._headers)
         if response.status_code != requests.codes.ok:
             raise NameError(f"Error {response}")
@@ -746,7 +793,7 @@ class WikiJsApi:
         }
         data = self.query_wikijs(query)
         # pprint(data)
-        page.content = xpath(data, 'data/pages/single/content')
+        page._content = xpath(data, 'data/pages/single/content')
 
     ##############################################
 

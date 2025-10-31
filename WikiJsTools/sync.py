@@ -87,7 +87,7 @@ def sync(api: WikiJsApi, path: Path) -> None:
     sync_path.mkdir(exist_ok=False)
 
     for page in api.list_pages():
-        page.complete()
+        # page.complete()
         file_path = page.sync(sync_path)
         if file_path is not None:
             _ = file_path.relative_to(sync_path)
@@ -196,7 +196,7 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
                     wrapper = page
                     action = 'current'
                     date = page.updatedAt
-                    page.complete()
+                    # page.complete()
                 printc(f'<blue>{action}</blue> @{page.locale} <green>{page.path}</green>')
                 file_path = wrapper.sync(repo_path, check_exists=False)
                 git('add', file_path)
