@@ -24,6 +24,7 @@ import requests
 
 from . import config
 from . import query as Q
+from .date import date2str
 from .node import Node
 from .printer import printc
 
@@ -460,6 +461,10 @@ class PageHistory:
     @property
     def date(self) -> datetime:
         return datetime.fromisoformat(self.versionDate)
+
+    @property
+    def date_str(self) -> str:
+        return date2str(self.date)
 
     @property
     def changed(self) -> bool:

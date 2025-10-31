@@ -630,13 +630,6 @@ class Cli:
 
     def history(self, path: PagePath) -> None:
         """Show page history"""
-        def date2str(date):
-            from dateutil import tz
-            # from_zone = tz.tzutc()
-            to_zone = tz.tzlocal()
-            _ = date.astimezone(to_zone)
-            return _.strftime('%Y/%m/%d %H:%M:%S')
-
         path = self._absolut_path(path)
         page = self._api.page(path)   # locale=
         # page.complete()
@@ -654,10 +647,14 @@ class Cli:
             if moved:
                 action.append('moved')
             action = ' '.join(action)
-            print(f"{number_of_versions-i:4} {date2str(ph.date)} {action}")
+            if action:
+                action = f'<blue>{action}</blue>'
+            else:
+                action = '<orange>ghost</orange>'
+            self.print(f"{number_of_versions-i:4} {ph.date_str} {action}")
             if moved:
                 old_path, new_path = moved
-                print(' '*10 + f'{old_path} -> {new_path}')
+                self.print(' '*10 + f'<green>{old_path}</green> -> <green>{new_path}</green>')
             # print(f"      {ph.actionType} : {ph.valueBefore} -> {ph.valueAfter}")
             # pv = ph.page_version
             # if pv is not None:
