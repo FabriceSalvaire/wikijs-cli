@@ -485,15 +485,17 @@ class PageHistory:
     def is_moved(self) -> bool | tuple[str, str]:
         if self.actionType == 'moved':
             return (self.valueBefore, self.valueAfter)
-        pv = self.page_version
-        if pv is not None and pv.action == 'moved':
-            old_path = pv.path
-            next = self.next
-            if next.is_current:
-                new_path = self.page.path
-            else:
-                new_path = next.page_version.path
-            return (old_path, new_path)
+        # but a move action can also be
+        prev = self.prev
+        if prev is not None:
+            prev_pv = prev.page_version
+            if prev_pv.action == 'moved':
+                old_path = prev_pv.path
+                if self.is_current:
+                    new_path = self.page.path
+                else:
+                    new_path = self.page_version.path
+                return (old_path, new_path)
         return False
 
 ####################################################################################################
