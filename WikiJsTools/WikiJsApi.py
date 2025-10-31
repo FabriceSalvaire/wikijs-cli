@@ -22,6 +22,7 @@ import os
 import requests
 
 from . import query as Q
+from .unicode import usorted
 
 ####################################################################################################
 
@@ -82,7 +83,8 @@ class Node:
     @property
     def childs(self) -> Iterator['Node']:
         childs = list(self._childs.values())
-        childs.sort(key=lambda _: _._name)
+        # childs.sort(key=lambda _: _._name)
+        childs = usorted(childs, 'name')
         return iter(childs)
 
     @property
@@ -99,7 +101,7 @@ class Node:
 
     @property
     def child_names(self) -> list[str]:
-        return sorted(self._childs.keys())
+        return usorted(self._childs.keys())
 
     @property
     def folder_names(self) -> list[str]:

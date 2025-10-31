@@ -40,6 +40,7 @@ from prompt_toolkit.shortcuts import ProgressBar
 from prompt_toolkit.styles import Style
 
 from .WikiJsApi import WikiJsApi, ApiError, Node, Page
+from .unicode import usorted
 
 ####################################################################################################
 
@@ -560,7 +561,8 @@ class Cli:
     def tree(self, path: PagePath) -> None:
         """Show page tree"""
         pages = list(self._api.tree(path))
-        pages.sort(key=lambda _: _.path)
+        # pages.sort(key=lambda _: _.path)
+        pages = usorted(pages, 'path')
         for page in pages:
             is_folder = '/' if page.isFolder else ''
             path = f"{page.path_str}{is_folder}"
@@ -584,8 +586,6 @@ class Cli:
     #
     # Page
     #
-
-    ##############################################
 
     def template(self, dst: FilePath, path: PagePath = None, locale: str = 'fr', content_type: str = 'markdown') -> None:
         """Write a page template"""
@@ -761,7 +761,7 @@ class Cli:
 
     def tags(self) -> None:
         """List the tags"""
-        for _ in self._api.tags():
+        for _ in usorted(self._api.tags(), 'tag'):
             self.print(f'<blue>{_.tag:30}</blue> <green>{_.title}</green>')
 
     ##############################################
@@ -1062,7 +1062,8 @@ class Cli:
     def links(self) -> None:
         """List the page links"""
         pages = list(self._api.links())
-        pages.sort(key=lambda _: _.path)
+        # pages.sort(key=lambda _: _.path)
+        pages = usorted(pages, 'path')
         for page in pages:
             self.print(f'<blue>{page.path:60}</blue>')
             # sorted()
