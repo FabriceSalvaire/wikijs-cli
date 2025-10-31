@@ -38,6 +38,7 @@ from prompt_toolkit.shortcuts import ProgressBar
 from prompt_toolkit.styles import Style
 
 from .WikiJsApi import WikiJsApi, ApiError, Node, Page
+from . import config
 from .printer import STYLE, printc, CommandError
 from .sync import sync, git_sync
 from .unicode import usorted
@@ -221,10 +222,6 @@ class CustomCompleter(Completer):
 
 class Cli:
 
-    CLI_HISTORY = Path('cli_history')
-
-    GIT_SYNC = 'git_sync'
-
     ##############################################
 
     @staticmethod
@@ -312,7 +309,7 @@ class Cli:
             if not self.run(query):
                 return
 
-        history = FileHistory(self.CLI_HISTORY)
+        history = FileHistory(config.CLI_HISTORY_PATH)
         session = PromptSession(
             completer=self._completer,
             history=history,
@@ -821,7 +818,8 @@ class Cli:
     def git_sync(self, path: Path = None) -> None:
         """Sync Git repo"""
         if path is None:
-           path = Path('.', self.GIT_SYNC)
+            GIT_SYNC = 'git_sync'
+            path = Path('.', GIT_SYNC)
         git_sync(self._api, path)
 
     ############################################################################
