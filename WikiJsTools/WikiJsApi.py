@@ -466,6 +466,20 @@ class PageHistory:
         return self.valueAfter != self.valueBefore
 
     @property
+    def path(self) -> str:
+        if self.is_current:
+            return self.page.path
+        else:
+            return self.page_version.path
+
+    @property
+    def content(self) -> str:
+        if self.is_current:
+            return self.page.content
+        else:
+            return self.page_version.content
+
+    @property
     def old_path(self) -> str:
         return self.valueBefore
 
@@ -479,6 +493,7 @@ class PageHistory:
             return self.page.content != self.prev.page_version.content
         elif self.prev is not None:
             return self.page_version.content != self.prev.page_version.content
+        # else initial
         return False
 
     @property
@@ -491,10 +506,7 @@ class PageHistory:
             prev_pv = prev.page_version
             if prev_pv.action == 'moved':
                 old_path = prev_pv.path
-                if self.is_current:
-                    new_path = self.page.path
-                else:
-                    new_path = self.page_version.path
+                new_path = self.path
                 return (old_path, new_path)
         return False
 

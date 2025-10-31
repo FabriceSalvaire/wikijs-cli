@@ -662,13 +662,6 @@ class Cli:
             # pv = ph.page_version
             # if pv is not None:
             #     print(f"      {pv.action}")
-            #     if pv.action == 'moved':
-            #         next = ph.next
-            #         if next.is_current:
-            #             new_path = page.path
-            #         else:
-            #             new_path = next.page_version.path
-            #         print(f"      {pv.path} -> {new_path}")
 
     ##############################################
 
