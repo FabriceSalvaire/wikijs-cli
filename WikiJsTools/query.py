@@ -34,6 +34,10 @@ query ($path: String!, $locale: String!) {
       privateNS
       createdAt
       updatedAt
+      authorId
+      authorName
+      creatorId
+      creatorName
       tags {
         tag
       }
@@ -154,25 +158,25 @@ PAGE_VERSION = '''
 query ($id: Int!, $version_id: Int!) {
   pages {
     version(pageId: $id, versionId: $version_id) {
-    action
-    authorId
-    authorName
-    content
-    contentType
-    createdAt
-    versionDate
-    description
-    editor
-    isPrivate
-    isPublished
-    locale
-    pageId
-    path
-    publishEndDate
-    publishStartDate
-    tags
-    title
-    versionId
+      action
+      authorId
+      authorName
+      content
+      contentType
+      createdAt
+      versionDate
+      description
+      editor
+      isPrivate
+      isPublished
+      locale
+      pageId
+      path
+      publishEndDate
+      publishStartDate
+      tags
+      title
+      versionId
 }}}
 '''
 

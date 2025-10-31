@@ -38,7 +38,7 @@ from prompt_toolkit.shortcuts import ProgressBar
 from prompt_toolkit.styles import Style
 
 from .WikiJsApi import WikiJsApi, ApiError, Node, Page
-from .printer import STYLE, printc
+from .printer import STYLE, printc, CommandError
 from .sync import sync, git_sync
 from .unicode import usorted
 
@@ -222,6 +222,8 @@ class Cli:
 
     CLI_HISTORY = Path('cli_history')
 
+    GIT_SYNC = 'git_sync'
+
     ##############################################
 
     @staticmethod
@@ -275,13 +277,15 @@ class Cli:
             method = getattr(self, command)
             try:
                 method(*argument)
+            except KeyboardInterrupt:
+                self.print(f"{LINESEP}<red>Interrupted</red>")
+            except ApiError as e:
+                self.print(f'API error: <red>{e}</red>')
+            except CommandError as e:
+                self.print(e)
             except Exception as e:
-                match e:
-                    case ApiError():
-                        self.print(f'API error: <red>{e}</red>')
-                    case _:
-                        print(traceback.format_exc())
-                        print(e)
+                print(traceback.format_exc())
+                print(e)
         except AttributeError:
             self.print(f"<red>Invalid command</red> <blue>{query}</blue>")
             self.usage()
@@ -639,7 +643,7 @@ class Cli:
         # page.complete()
         history = page.history
         number_of_versions = len(history)
-        print(f"{number_of_versions+1:4} {date2str(page.updated_at)}")
+        # print(f"{number_of_versions+1:4} {date2str(page.updated_at)}")
         for i, ph in enumerate(history):
             # {ph.actionType}
             print(f"{number_of_versions-i:4} {date2str(ph.date)}")
@@ -807,12 +811,16 @@ class Cli:
 
     def sync(self, path: Path = None) -> None:
         """Sync on disk"""
+        if path is None:
+            path = Path('.', 'sync')
         sync(self._api, path)
 
     ##############################################
 
     def git_sync(self, path: Path = None) -> None:
         """Sync Git repo"""
+        if path is None:
+           path = Path('.', self.GIT_SYNC)
         git_sync(self._api, path)
 
     ############################################################################

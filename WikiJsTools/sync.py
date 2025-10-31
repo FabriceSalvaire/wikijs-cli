@@ -17,137 +17,27 @@ import json
 import os
 import subprocess
 
+from .printer import printc, CommandError
 from .WikiJsApi import WikiJsApi
 
 ####################################################################################################
 
 GIT = '/usr/bin/git'
-GIT_SYNC = 'git_sync'
-HISTORY_JSON = 'history.json'
+
+HISTORY_JSON = 'wikijs-history.json'
 
 ####################################################################################################
 
-def sync(api: WikiJsApi, path: Path = None) -> None:
-    """Sync on disk"""
-    if path is None:
-        path = Path('.', 'sync')
-    path.mkdir(exist_ok=True)
+def sync_asset(api: WikiJsApi, path: Path, exist_ok: bool = False) -> None:
 
-    # i = 0
-    for page in api.list_pages():
-        page.complete()
-        file_path = page.sync(path)
-        if file_path is not None:
-            print(f"Wrote {file_path}")
-        # else is up to date
-        # i += 1
-        # if i > 3:
-        #    break
+    # DANGER : remove all the files that are not listed as assets !!!
 
-####################################################################################################
-
-def git_sync(api: WikiJsApi, path: Path = None) -> None:
-    """Sync Git repo"""
+    asset_path = Path(path).expanduser().resolve()
     # Protection
-    if Path.cwd().joinpath('.git').exists():
-        print(f"Current path is a git repo. Exit")
-        return
+    if asset_path.exists() and not exist_ok:
+        raise CommandError(f"<red>Asset path <green>{asset_path}</green> exists</red>")
+    asset_path.mkdir(parents=True, exist_ok=exist_ok)
 
-    if path is None:
-        sync_dir = Path('.', GIT_SYNC).resolve()
-    else:
-        sync_dir = Path(path)
-    print(f"Git path {sync_dir}")
-
-    created = False
-    if sync_dir.exists():
-        print("Git already initialised")
-    else:
-        sync_dir.mkdir()
-        created = True
-    os.chdir(sync_dir)
-    json_versions = []
-    last_version_date = None
-    if created:
-        # Fixme: to func
-        subprocess.run((GIT, 'init'), check=True)
-    else:
-        with open(HISTORY_JSON, 'r') as fh:
-            json_versions = json.load(fh)
-            last_version = json_versions[-1]
-            # How versionID are generated ???
-            # last_version_id = last_version['versionId']
-            last_version_date = datetime.fromisoformat(last_version['versionDate'])
-        print(f"Last version date {last_version_date}")
-
-    def commit(version, message: str) -> None:
-        subprocess.run(
-            (
-                GIT,
-                'commit',
-                '-m', message,
-                f'--date={version.versionDate}',
-            ),
-            check=True,
-        )
-
-    # Fixme: progress callback
-    #  how to get number of versions ?
-    def progress_callback(p: int) -> None:
-        print(f"{p} % done")
-
-    # Fixme: skip ?
-    print("Get page histories...")
-    history = api.history(progress_callback)
-    print("Done")
-
-    # Commit page history
-    for page_history in history:
-        if last_version_date is not None:
-            _ = datetime.fromisoformat(page_history.versionDate)
-            if _ <= last_version_date:
-                continue
-
-        version = page_history.page_version
-        # Fixme: ???
-        if 'content' in version.path:
-            pprint(page_history)
-            pprint(version)
-        # /!\ In some case page_history.actionType = initial and version.action = moved
-        match page_history.actionType:
-            case 'initial' | 'edit':
-                print(f'{version.action} {version.path}')
-                file_path = version.sync('.', check_exists=False)
-                subprocess.run((GIT, 'add', file_path), check=True)
-                commit(version, f'update {file_path}')
-            case 'move':
-                # Fixme: ???
-                if page_history.changed:
-                    page = version.page
-                    print(f'{version.action} {page.locale} {page_history.old_path} -> {page_history.new_path}')
-                    old_path = page.file_path('.', page_history.old_path)
-                    if not old_path.exists():
-                        raise NameError(f"Error {old_path} is missing")
-                    else:
-                        new_path = page.file_path('.', page_history.new_path)
-                        new_path.parent.mkdir(parents=True, exist_ok=True)
-                        # Fixme: remove old directory
-                        subprocess.run((GIT, 'mv', old_path, new_path), check=True)
-                        # update file content metadata
-                        file_path = version.sync('.', check_exists=False)
-                        subprocess.run((GIT, 'add', file_path), check=True)
-                        # Fixme: is move and update possible ???
-                        commit(version, f'move {old_path} -> {new_path}')
-                else:
-                    print(f'{version.action} unchanged')
-            case _:
-                raise NotImplementedError(f"Action {version.action}")
-
-    # Save Assets
-    #  Wiki.js doesn't implement an history for assets
-    # asset_path = sync_dir.joinpath('_assets')
-    asset_path = Path('_assets')
-    asset_path.mkdir(parents=True, exist_ok=True)
     # Collect current asset list on disk
     paths = []
     for dirpath, dirnames, filenames in asset_path.walk():
@@ -173,7 +63,7 @@ def git_sync(api: WikiJsApi, path: Path = None) -> None:
         # asset.created_at.timestamp()
         mtime = asset.updated_at.timestamp()
         if not (path.exists() and path.stat().st_mtime == mtime):
-            print(f"Write {asset.path}")
+            printc(f"Write {asset.path}")
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
             os.utime(path, (mtime, mtime))
@@ -182,20 +72,180 @@ def git_sync(api: WikiJsApi, path: Path = None) -> None:
     for _ in paths:
         _.unlink()
 
+####################################################################################################
+
+def sync(api: WikiJsApi, path: Path) -> None:
+    """Sync on disk"""
+
+   # DANGER : write many files and delete old assets !!!
+
+    sync_path = Path(path).expanduser().resolve()
+    if sync_path.exists():
+        raise CommandError(f"<red>Sync path <green>{sync_path}</green> exists</red>")
+    printc(f"Sync path <green>{sync_path}</green>")
+    # Protection
+    sync_path.mkdir(exist_ok=False)
+
+    for page in api.list_pages():
+        page.complete()
+        file_path = page.sync(sync_path)
+        if file_path is not None:
+            _ = file_path.relative_to(sync_path)
+            printc(f"Wrote {_}")
+        # else is up to date
+
+    asset_path = sync_path.joinpath('_assets')
+    sync_asset(api, asset_path)
+
+####################################################################################################
+
+def git_sync(api: WikiJsApi, path: Path) -> None:
+    """Sync Git repo"""
+
+    # DANGER : don't run in another Git repo !!!
+
+    # Fixme: remove ???
+    # Protection
+    # if Path.cwd().joinpath('.git').exists():
+    #     printc(f"Current path is a git repo. Exit")
+    #     return
+
+    repo_path = Path(path).expanduser().resolve()
+    printc(f"Git repository path <green>{repo_path}</green>")
+
+    created = False
+    if repo_path.exists():
+        # Protection
+        if not repo_path.joinpath('.git').exists():
+            raise CommandError(f"<red> Directory <green>{repo_path}</green> is not a git repository</red>")
+        if not repo_path.joinpath(HISTORY_JSON).exists():
+            raise CommandError(f"<red> Directory <green>{repo_path}</green> doesn't have a JSON history</red>")
+        printc("Git already initialised")
+    else:
+        repo_path.mkdir()
+        created = True
+
+    history_json_path = repo_path.joinpath(HISTORY_JSON)
+    asset_path = repo_path.joinpath('_assets')
+
+    def git(command: str, *args) -> None:
+        subprocess.run(
+            (
+                GIT,
+                command,
+                *args,
+            ),
+            check=True,
+            cwd=repo_path,
+        )
+
+    def commit(date, message: str) -> None:
+        git(
+            'commit',
+            '-m', message,
+            f'--date={date}',
+        )
+
+    json_versions = []
+    last_version_date = None
+    if created:
+        git('init')
+    else:
+        with open(history_json_path, 'r') as fh:
+            json_versions = json.load(fh)
+            last_version = json_versions[-1]
+            # How versionID are generated ???
+            # last_version_id = last_version['versionId']
+            last_version_date = datetime.fromisoformat(last_version['versionDate'])
+        printc(f"Last version date {last_version_date}")
+
+    # Fixme: progress callback
+    #  how to get number of versions ?
+    def progress_callback(p: int) -> None:
+        printc(f"{p} % done")
+
+    # Fixme: skip ?
+    printc("Get page histories...")
+    history = api.history(progress_callback)
+    printc("Done")
+
+    # Commit page history
+    for ph in history:
+        if last_version_date is not None:
+            _ = datetime.fromisoformat(ph.versionDate)
+            if _ <= last_version_date:
+                continue
+
+        page = ph.page
+        pv = ph.page_version   # is None for current
+
+        # Fixme: ???
+        # if 'content' in pv.path:
+        #     pprint(ph)
+        #     pprint(pv)
+
+        # /!\ In some case ph.actionType = initial and pv.action = moved
+        match ph.actionType:
+            case 'initial' | 'edit':
+                if pv is not None:
+                    wrapper = pv
+                    action = pv.action
+                    date = pv.versionDate
+                else:
+                    # current version
+                    wrapper = page
+                    action = 'current'
+                    date = page.updatedAt
+                    page.complete()
+                printc(f'<blue>{action}</blue> @{page.locale} <green>{page.path}</green>')
+                file_path = wrapper.sync(repo_path, check_exists=False)
+                git('add', file_path)
+                message = f'update @{page.locale} {page.path}'
+                commit(date, message)
+            case 'move':
+                # Fixme: ???
+                if ph.changed:
+                    printc(f'<blue>{pv.action}</blue> @{page.locale} <green>{ph.old_path}</green> -> <green>{ph.new_path}</green>')
+                    old_path = page.file_path(repo_path, ph.old_path)
+                    if not old_path.exists():
+                        raise CommandError(f"<red>Error <green>{old_path}</green> is missing</red>")
+                    else:
+                        new_path = page.file_path(repo_path, ph.new_path)
+                        new_path.parent.mkdir(parents=True, exist_ok=True)
+                        # Fixme: remove old directory
+                        git('mv', old_path, new_path)
+                        # update file content metadata
+                        file_path = pv.sync(repo_path, check_exists=False)
+                        git('add', file_path)
+                        # Fixme: is move and update possible ???
+                        message = f'move @{page.locale} {ph.old_path} -> {ph.new_path}'
+                        commit(pv.versionDate, message)
+                else:
+                    printc(f'<red>@{page.locale} {pv.page.path} {pv.action} unchanged</red>')
+            case _:
+                raise NotImplementedError(f"Action {pv.action}")
+
+    # Save Assets
+    #  Wiki.js doesn't implement an history for assets
+    sync_asset(api, asset_path, exist_ok=True)
+
     # Now write history.json
-    with open(HISTORY_JSON, 'w') as fh:
+    with open(history_json_path, 'w') as fh:
         # Fixme: reset ?
         json_versions = []
-        for page_history in history:
+        for ph in history:
+            pv = ph.page_version
+            if pv is None:
+                continue
             d = {
                 key: value
-                for key, value in page_history.__dict__.items()
+                # Fixme: better ?
+                for key, value in ph.__dict__.items()
                 if key not in ('api', 'page', '_page_version') and value is not None
             }
-            page_version = page_history.page_version
-            d['locale'] = page_version.locale
-            d['path'] = page_version.path
-            d['pageId'] = page_version.pageId
+            d['locale'] = pv.locale
+            d['path'] = pv.path
+            d['pageId'] = pv.pageId
             json_versions.append(d)
         # last = history[-1]
         # data = {

@@ -6,7 +6,7 @@
 #
 ####################################################################################################
 
-__all__ = ['printc', 'default_print', 'pt_print', 'STYLE', 'remove_style']
+__all__ = ['printc', 'default_print', 'pt_print', 'STYLE', 'remove_style', 'CommandError']
 
 ####################################################################################################
 
@@ -120,3 +120,8 @@ def remove_style(message: str) -> None:
 
 # atprint = default_print
 printc = pt_print
+
+####################################################################################################
+
+class CommandError(NameError):
+    pass

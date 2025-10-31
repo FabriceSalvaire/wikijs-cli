@@ -378,37 +378,46 @@ class BasePage:
 
 @dataclass
 class Page(BasePage):
+    # Merge PageListItem
+    #  irrelevant attributes are set to None
+
     api: 'WikiJsApi'
 
     id: int
     path: PurePosixPath
     locale: str
+
     title: str
     description: str
     contentType: str
-    isPublished: bool
-    isPrivate: bool
-    privateNS: str
-    createdAt: str
-    updatedAt: str
     tags: list[str]
 
+    createdAt: str
+    updatedAt: str
+
+    isPublished: bool
+    # publishStartDate: str
+    # publishEndDate: str
+
+    isPrivate: bool
+    privateNS: str
+
+    authorId: int = None
+    authorName: str = None
+    creatorId: int = None
+    creatorName: str = None
+    # authorEmail: str
+    # creatorEmail: str
+
+    # Fixme: automatic complete
     content: str = None
 
     # hash: str
-    # publishStartDate: Date
-    # publishEndDate: Date
     # render: str
     # toc: str
     # editor: str
     # scriptCss: str
     # scriptJs: str
-    # authorId: int
-    # authorName: str
-    # authorEmail: str
-    # creatorId: int
-    # creatorName: str
-    # creatorEmail: str
 
     ##############################################
 
@@ -424,8 +433,19 @@ class Page(BasePage):
     @property
     def history(self) -> list['PageHistory']:
         # order is newer first
+        # the first one corresponds to the previous version !
         if '_history' not in self.__dict__:
-            self._history = self.api.page_history(self)
+            current = PageHistory(
+                api=self.api,
+                page=self,
+                versionDate=self.updatedAt,
+                authorId=self.authorId,
+                authorName=self.authorName,
+                actionType='edit',
+            )
+            history = [current]
+            history += self.api.page_history(self)
+            self._history = history
             # self._history_map = {_.versionId: _ for _ in self._history}
         return self._history
 
@@ -437,10 +457,6 @@ class Page(BasePage):
             return datetime.fromisoformat(self.updatedAt)
         else:
             return None
-
-    @property
-    def version_id(self) -> int:
-        return self.history[-1].versionId
 
     ##############################################
 
@@ -513,19 +529,28 @@ class PageHistory:
     api: 'WikiJsApi'
     page: Page
 
-    versionId: int
     versionDate: str
     authorId: int
     authorName: str
     actionType: str
 
-    valueBefore: str
-    valueAfter: str
+    versionId: int = None   # to fake the current version
+
+    # used for actionType = 'move'
+    valueBefore: str = None  # aka old path
+    valueAfter: str = None   # aka move path
 
     ##############################################
 
     @property
+    def is_current(self) -> bool:
+        # Fixme: could be updated on server
+        return self.versionDate == self.page.updatedAt
+
+    @property
     def page_version(self) -> PageVersion:
+        if self.versionId is None:
+            return None
         if '_page_version' not in self.__dict__:
             self._page_version = self.api.page_version(self)
         return self._page_version
@@ -843,6 +868,7 @@ class WikiJsApi:
     ##############################################
 
     def page_history(self, page: Page) -> None:
+        # Return previous versions ordered form the last to the initial one
         query = {
             'variables': {
                 'id': page.id,
@@ -903,11 +929,23 @@ class WikiJsApi:
 
     ##############################################
 
-    def page_version(self, page_history: PageHistory) -> None:
+    def page_version(self, page_history: PageHistory = None) -> None:
+        # /!\ the current version doesn't have a PageVersion
+        # page: Page = None
+        # if page is None and page_history is None:
+        #     raise NameError("page or page_history is required")
+        # if page is not None:
+        #     id = page.id
+        #     version_id = page.version_id
+        # else:
+        id = page_history.page.id
+        version_id = page_history.versionId
+        if version_id is None:
+            raise ValueError("current version doesn't have PageVersion")
         query = {
             'variables': {
-                'id': page_history.page.id,
-                'version_id': page_history.versionId,
+                'id': id,
+                'version_id': version_id,
             },
             'query': Q.PAGE_VERSION,
         }
