@@ -523,7 +523,7 @@ class PageHistory:
     ##############################################
 
     @property
-    def page_version(self) -> None:
+    def page_version(self) -> PageVersion:
         if '_page_version' not in self.__dict__:
             self._page_version = self.api.page_version(self)
         return self._page_version

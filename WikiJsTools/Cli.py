@@ -655,6 +655,25 @@ class Cli:
 
     ##############################################
 
+    def history(self, path: PagePath) -> None:
+        """Show page history"""
+        def date2str(date):
+            return date.strftime('%Y/%m/%d %H:%M:%S')
+
+        path = self._absolut_path(path)
+        page = self._api.page(path)   # locale=
+        # page.complete()
+        history = page.history
+        number_of_versions = len(history)
+        print(f"{number_of_versions+1:4} {date2str(page.updated_at)}")
+        for i, ph in enumerate(history):
+            # {ph.actionType}
+            print(f"{number_of_versions-i:4} {date2str(ph.date)}")
+            if ph.actionType == 'move':
+                print(' '*10 + f'{ph.old_path} -> {ph.new_path}')
+
+    ##############################################
+
     def diff(self, input: FilePath = None) -> None:
         """Diff a page"""
         file_page = Page.read(input, self._api)
