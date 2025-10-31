@@ -187,7 +187,8 @@ class CustomCompleter(Completer):
             if folder:
                 return cwd.folder_names
             else:
-                return cwd.leaf_names
+                # return cwd.leaf_names
+                return cwd.leaf_names + cwd.folder_names
 
         if command is None:
             words = self._commands
