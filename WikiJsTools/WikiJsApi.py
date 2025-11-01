@@ -669,6 +669,15 @@ class WikiJsApi:
         else:
             return data
 
+    ############################################################################
+
+    def get(self, url: str) -> bytes:
+        url = f'{self._api_url}/{url}'
+        response = requests.get(url, headers=self._headers)
+        if response.status_code != requests.codes.ok:
+            raise NameError(f"Error {response}")
+        return response.content
+
     ##############################################
 
     def upload(self, folder_id: int, path: Path | str, name: str = None) -> None:
@@ -687,16 +696,7 @@ class WikiJsApi:
             raise NameError(f"Error {response}")
         # pprint(response)
 
-    ##############################################
-
-    def get(self, url: str) -> bytes:
-        url = f'{self._api_url}/{url}'
-        response = requests.get(url, headers=self._headers)
-        if response.status_code != requests.codes.ok:
-            raise NameError(f"Error {response}")
-        return response.content
-
-    ##############################################
+    ############################################################################
 
     def info(self) -> None:
         query = {
@@ -707,7 +707,10 @@ class WikiJsApi:
         # pprint(data)
         self._number_of_pages = _['pagesTotal']
 
-    ##############################################
+    ############################################################################
+    #
+    # Page
+    #
 
     @property
     def number_of_pages(self) -> int:
@@ -734,6 +737,143 @@ class WikiJsApi:
         return Page(api=self, **_)
 
     ##############################################
+
+    def complete_page(self, page: Page) -> None:
+        query = {
+            'variables': {
+                'id': page.id,
+            },
+            'query': 'query ($id: Int!) {pages {single(id: $id) {content}}}',
+        }
+        data = self.query_wikijs(query)
+        # pprint(data)
+        page._content = xpath(data, 'data/pages/single/content')
+
+    ##############################################
+
+    def page_history(self, page: Page) -> None:
+        # Return previous versions ordered form the last to the initial one
+        query = {
+            'variables': {
+                'id': page.id,
+            },
+            'query': Q.PAGE_HISTORY,
+        }
+        data = self.query_wikijs(query)
+        history = xpath(data, 'data/pages/history/trail')
+        # _ = xpath(data, 'data/pages/history/total')
+        return [PageHistory(api=self, page=page, **_) for _ in history]
+
+    ##############################################
+
+    def page_version(self, page_history: PageHistory = None) -> None:
+        # /!\ the current version doesn't have a PageVersion
+        # page: Page = None
+        # if page is None and page_history is None:
+        #     raise NameError("page or page_history is required")
+        # if page is not None:
+        #     id = page.id
+        #     version_id = page.version_id
+        # else:
+        id = page_history.page.id
+        version_id = page_history.versionId
+        if version_id is None:
+            raise ValueError("current version doesn't have PageVersion")
+        query = {
+            'variables': {
+                'id': id,
+                'version_id': version_id,
+            },
+            'query': Q.PAGE_VERSION,
+        }
+        data = self.query_wikijs(query)
+        _ = xpath(data, 'data/pages/version')
+        return PageVersion(api=self, page=page_history.page, **_)
+
+    ##############################################
+
+    def create_page(self, page: Page) -> ResponseResult:
+        variables = {_: getattr(page, _) for _ in (
+            'content',
+            'description',
+            'isPublished',
+            'isPrivate',
+            'locale',
+            # 'path',
+            'tags',
+            'title',
+        )}
+        variables['path'] = page.path_str
+        variables.update({
+            'editor': page.contentType,
+            'publishEndDate': '',
+            'publishStartDate': '',
+            'scriptCss': '',
+            'scriptJs': '',
+        })
+        query = {
+            'variables': variables,
+            "query": Q.CREATE_PAGE,
+        }
+        # pprint(query)
+        data = self.query_wikijs(query)
+        # pprint(data)
+        _ = xpath(data, 'data/pages/create/responseResult')
+        return ResponseResult(**_)
+
+    ##############################################
+
+    def update_page(self, page: Page) -> ResponseResult:
+        # Fixme: checkConflicts
+        # "variables":{"id":96,"checkoutDate":"2024-11-07T02:04:57.106Z"}
+        # "query ($id: Int!, $checkoutDate: Date!) { pages {
+        #   checkConflicts(id: $id, checkoutDate: $checkoutDate) }}"}]'
+        query = {
+            'variables': {
+                'id': page.id,
+                'content': page.content,
+                'description': '',
+                'editor': 'markdown',
+                'isPrivate': False,
+                'isPublished': True,
+                'locale': page.locale,
+                'path': page.path_str,
+                'publishEndDate': '',
+                'publishStartDate': '',
+                'scriptCss': '',
+                'scriptJs': '',
+                'tags': page.tags,
+                'title': page.title,
+            },
+            "query": Q.UPDATE_PAGE,
+        }
+        # pprint(query)
+        data = self.query_wikijs(query)
+        # pprint(data)
+        _ = xpath(data, 'data/pages/update/responseResult')
+        return ResponseResult(**_)
+
+    ##############################################
+
+    def move_page(self, page: Page, path: str, locale: str = 'fr') -> ResponseResult:
+        query = {
+            'variables': {
+                'id': page.id,
+                'destinationPath': str(path),
+                'destinationLocale': locale,
+            },
+            'query': Q.MOVE_PAGE,
+        }
+        # pprint(query)
+        data = self.query_wikijs(query)
+        # pprint(data)
+        _ = xpath(data, 'data/pages/move/responseResult')
+        return ResponseResult(**_)
+
+    ############################################################################
+    #
+    # Pages
+    #
 
     def list_pages(self, order_by: str = 'PATH', reverse: bool = False, limit: int = 0) -> Iterator[Page]:
         order_by_direction = 'DESC' if reverse else 'ASC'
@@ -818,33 +958,76 @@ class WikiJsApi:
 
     ##############################################
 
-    def complete_page(self, page: Page) -> None:
+    def search(self, query: str) -> PageSearchResponse:
         query = {
             'variables': {
-                'id': page.id,
+                'query': query,
             },
-            'query': 'query ($id: Int!) {pages {single(id: $id) {content}}}',
+            'query': Q.SEARCH,
         }
         data = self.query_wikijs(query)
-        # pprint(data)
-        page._content = xpath(data, 'data/pages/single/content')
+        results = [PageSearchResult(**_) for _ in xpath(data, 'data/pages/search/results')]
+        _ = {
+            key: value
+            for key, value in xpath(data, 'data/pages/search').items()
+            if key != 'results'
+        }
+        return PageSearchResponse(
+            results=results,
+            **_,
+        )
 
     ##############################################
 
-    def page_history(self, page: Page) -> None:
-        # Return previous versions ordered form the last to the initial one
+    def history(self, progress_callback, preload_version: bool = True) -> list[PageHistory]:
+        # history = [_ for page in self.list_pages() for _ in page.history]
+        history = []
+        P_STEP = 10
+        next_p = P_STEP
+        for i, page in enumerate(self.list_pages()):
+            p = 100 * i / self._number_of_pages
+            if p > next_p:
+                progress_callback(int(p))
+                next_p += P_STEP
+            print(f'{page.path}')
+            for _ in page.history:
+                if preload_version:
+                    _.page_version
+                history.append(_)
+        history.sort(key=lambda _: _.date)
+        # for _ in history:
+        #     print(f'{_.versionId} {_.date} {_.page.id} {_.page.path} {_.actionType}')
+        return history
+
+    ############################################################################
+    #
+    # Tag
+    #
+
+    def tags(self) -> Iterator[Tag]:
         query = {
-            'variables': {
-                'id': page.id,
-            },
-            'query': Q.PAGE_HISTORY,
+            'query': Q.TAGS,
         }
         data = self.query_wikijs(query)
-        history = xpath(data, 'data/pages/history/trail')
-        # _ = xpath(data, 'data/pages/history/total')
-        return [PageHistory(api=self, page=page, **_) for _ in history]
+        for _ in xpath(data, 'data/pages/tags'):
+            yield Tag(**_)
 
     ##############################################
+
+    def search_tags(self, query: str) -> list[str]:
+        query = {
+            'variables': {
+                'query': query,
+            },
+            'query': Q.SEARCH_TAGS,
+        }
+        data = self.query_wikijs(query)
+        return xpath(data, 'data/pages/searchTags')
+
+    ############################################################################
+    #
+    # Asset
+    #
 
     def list_asset_subfolder(self, folder_id: int = 0) -> Iterator[AssetFolder]:
         query = {
@@ -891,178 +1074,10 @@ class WikiJsApi:
         for _ in xpath(data, 'data/assets/list'):
             yield Asset(**_)
 
-    ##############################################
-
-    def page_version(self, page_history: PageHistory = None) -> None:
-        # /!\ the current version doesn't have a PageVersion
-        # page: Page = None
-        # if page is None and page_history is None:
-        #     raise NameError("page or page_history is required")
-        # if page is not None:
-        #     id = page.id
-        #     version_id = page.version_id
-        # else:
-        id = page_history.page.id
-        version_id = page_history.versionId
-        if version_id is None:
-            raise ValueError("current version doesn't have PageVersion")
-        query = {
-            'variables': {
-                'id': id,
-                'version_id': version_id,
-            },
-            'query': Q.PAGE_VERSION,
-        }
-        data = self.query_wikijs(query)
-        _ = xpath(data, 'data/pages/version')
-        return PageVersion(api=self, page=page_history.page, **_)
-
-    ##############################################
-
-    def move_page(self, page: Page, path: str, locale: str = 'fr') -> ResponseResult:
-        query = {
-            'variables': {
-                'id': page.id,
-                'destinationPath': str(path),
-                'destinationLocale': locale,
-            },
-            'query': Q.MOVE_PAGE,
-        }
-        # pprint(query)
-        data = self.query_wikijs(query)
-        # pprint(data)
-        _ = xpath(data, 'data/pages/move/responseResult')
-        return ResponseResult(**_)
-
-    ##############################################
-
-    def create_page(self, page: Page) -> ResponseResult:
-        variables = {_: getattr(page, _) for _ in (
-            'content',
-            'description',
-            'isPublished',
-            'isPrivate',
-            'locale',
-            # 'path',
-            'tags',
-            'title',
-        )}
-        variables['path'] = page.path_str
-        variables.update({
-            'editor': page.contentType,
-            'publishEndDate': '',
-            'publishStartDate': '',
-            'scriptCss': '',
-            'scriptJs': '',
-        })
-        query = {
-            'variables': variables,
-            "query": Q.CREATE_PAGE,
-        }
-        # pprint(query)
-        data = self.query_wikijs(query)
-        # pprint(data)
-        _ = xpath(data, 'data/pages/create/responseResult')
-        return ResponseResult(**_)
-
-    ##############################################
-
-    def update_page(self, page: Page) -> ResponseResult:
-        # Fixme: checkConflicts
-        # "variables":{"id":96,"checkoutDate":"2024-11-07T02:04:57.106Z"}
-        # "query ($id: Int!, $checkoutDate: Date!) { pages {
-        #   checkConflicts(id: $id, checkoutDate: $checkoutDate) }}"}]'
-        query = {
-            'variables': {
-                'id': page.id,
-                'content': page.content,
-                'description': '',
-                'editor': 'markdown',
-                'isPrivate': False,
-                'isPublished': True,
-                'locale': page.locale,
-                'path': page.path_str,
-                'publishEndDate': '',
-                'publishStartDate': '',
-                'scriptCss': '',
-                'scriptJs': '',
-                'tags': page.tags,
-                'title': page.title,
-            },
-            "query": Q.UPDATE_PAGE,
-        }
-        # pprint(query)
-        data = self.query_wikijs(query)
-        # pprint(data)
-        _ = xpath(data, 'data/pages/update/responseResult')
-        return ResponseResult(**_)
-
-    ##############################################
-
-    def history(self, progress_callback, preload_version: bool = True) -> list[PageHistory]:
-        # history = [_ for page in self.list_pages() for _ in page.history]
-        history = []
-        P_STEP = 10
-        next_p = P_STEP
-        for i, page in enumerate(self.list_pages()):
-            p = 100 * i / self._number_of_pages
-            if p > next_p:
-                progress_callback(int(p))
-                next_p += P_STEP
-            print(f'{page.path}')
-            for _ in page.history:
-                if preload_version:
-                    _.page_version
-                history.append(_)
-        history.sort(key=lambda _: _.date)
-        # for _ in history:
-        #     print(f'{_.versionId} {_.date} {_.page.id} {_.page.path} {_.actionType}')
-        return history
-
-    ##############################################
-
-    def search(self, query: str) -> PageSearchResponse:
-        query = {
-            'variables': {
-                'query': query,
-            },
-            'query': Q.SEARCH,
-        }
-        data = self.query_wikijs(query)
-        results = [PageSearchResult(**_) for _ in xpath(data, 'data/pages/search/results')]
-        _ = {
-            key: value
-            for key, value in xpath(data, 'data/pages/search').items()
-            if key != 'results'
-        }
-        return PageSearchResponse(
-            results=results,
-            **_,
-        )
-
-    ##############################################
-
-    def tags(self) -> Iterator[Tag]:
-        query = {
-            'query': Q.TAGS,
-        }
-        data = self.query_wikijs(query)
-        for _ in xpath(data, 'data/pages/tags'):
-            yield Tag(**_)
-
-    ##############################################
-
-    def search_tags(self, query: str) -> list[str]:
-        query = {
-            'variables': {
-                'query': query,
-            },
-            'query': Q.SEARCH_TAGS,
-        }
-        data = self.query_wikijs(query)
-        return xpath(data, 'data/pages/searchTags')
-
-    ##############################################
+    ############################################################################
+    #
+    #
+    #
 
     def links(self) -> Iterator[PageLinkItem]:
         query = {
