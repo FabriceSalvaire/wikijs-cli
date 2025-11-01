@@ -33,6 +33,8 @@ def sync_asset(api: WikiJsApi, path: Path, exist_ok: bool = False) -> None:
     # DANGER : remove all the files that are not listed as assets !!!
 
     asset_path = Path(path).expanduser().resolve()
+    printc(f"Sync asset path <green>{asset_path}</green>")
+
     # Protection
     if asset_path.exists() and not exist_ok:
         raise CommandError(f"<red>Asset path <green>{asset_path}</green> exists</red>")
@@ -129,12 +131,15 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
     asset_path = repo_path.joinpath('_assets')
 
     def git(command: str, *args) -> None:
+        args = [str(_) for _ in args]
+        cmd = (
+            GIT,
+            command,
+            *args,
+        )
+        print(' '.join(cmd))
         subprocess.run(
-            (
-                GIT,
-                command,
-                *args,
-            ),
+            cmd,
             check=True,
             cwd=repo_path,
         )
@@ -177,53 +182,38 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
                 continue
 
         page = ph.page
-        pv = ph.page_version   # is None for current
 
-        # Fixme: ???
-        # if 'content' in pv.path:
-        #     pprint(ph)
-        #     pprint(pv)
-
-        # /!\ In some case ph.actionType = initial and pv.action = moved
-        match ph.actionType:
-            case 'initial' | 'edit':
-                if pv is not None:
-                    wrapper = pv
-                    action = pv.action
-                    date = pv.versionDate
-                else:
-                    # current version
-                    wrapper = page
-                    action = 'current'
-                    date = page.updatedAt
-                    # page.complete()
-                printc(f'<blue>{action}</blue> @{page.locale} <green>{page.path}</green>')
-                file_path = wrapper.sync(repo_path, check_exists=False)
+        is_moved = ph.is_moved
+        if is_moved:
+            old_upath, new_upath = is_moved
+            printc(f'<blue>moved</blue> @{page.locale} <green>{old_upath}</green> -> <green>{new_upath}</green>')
+            old_path = page.file_path(repo_path, old_upath)
+            if not old_path.exists():
+                raise CommandError(f"<red>Error <green>{old_upath}</green> is missing</red>")
+            else:
+                new_path = page.file_path(repo_path, new_upath)
+                new_path.parent.mkdir(parents=True, exist_ok=True)
+                # Fixme: remove old directory
+                git('mv', old_path, new_path)
+                # update file content metadata
+                # Fixme: file_path == new_path
+                file_path = ph.sync(repo_path, check_exists=False)
                 git('add', file_path)
-                message = f'update @{page.locale} {page.path}'
-                commit(date, message)
-            case 'move':
-                # Fixme: ???
-                if ph.changed:
-                    printc(f'<blue>{pv.action}</blue> @{page.locale} <green>{ph.old_path}</green> -> <green>{ph.new_path}</green>')
-                    old_path = page.file_path(repo_path, ph.old_path)
-                    if not old_path.exists():
-                        raise CommandError(f"<red>Error <green>{old_path}</green> is missing</red>")
-                    else:
-                        new_path = page.file_path(repo_path, ph.new_path)
-                        new_path.parent.mkdir(parents=True, exist_ok=True)
-                        # Fixme: remove old directory
-                        git('mv', old_path, new_path)
-                        # update file content metadata
-                        file_path = pv.sync(repo_path, check_exists=False)
-                        git('add', file_path)
-                        # Fixme: is move and update possible ???
-                        message = f'move @{page.locale} {ph.old_path} -> {ph.new_path}'
-                        commit(pv.versionDate, message)
-                else:
-                    printc(f'<red>@{page.locale} {pv.page.path} {pv.action} unchanged</red>')
-            case _:
-                raise NotImplementedError(f"Action {pv.action}")
+                # Fixme: is move and update possible ???
+                message = f'{ph.date_str} <blue>move</blue> @{page.locale} {ph.old_path} -> {ph.new_path}'
+                commit(ph.date, message)
+        elif ph.is_initial or ph.is_edited:
+            if ph.is_initial:
+                action = 'create'
+            else:
+                action = 'edit'
+            printc(f'{ph.date_str} <blue>{action}</blue> @{page.locale} <green>{page.path}</green>')
+            file_path = ph.sync(repo_path, check_exists=False)
+            git('add', file_path)
+            message = f'{action} @{page.locale} {page.path}'
+            commit(ph.date, message)
+
+    # Fixme: remove empty directory
 
     # Save Assets
     #  Wiki.js doesn't implement an history for assets
@@ -234,12 +224,12 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
         # Fixme: reset ?
         json_versions = []
         for ph in history:
+            # Fixme: better ?
             pv = ph.page_version
             if pv is None:
                 continue
             d = {
                 key: value
-                # Fixme: better ?
                 for key, value in ph.__dict__.items()
                 if key not in ('api', 'page', '_page_version') and value is not None
             }

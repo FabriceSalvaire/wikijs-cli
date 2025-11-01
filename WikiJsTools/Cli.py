@@ -36,8 +36,8 @@ from prompt_toolkit.shortcuts import ProgressBar
 
 from .WikiJsApi import WikiJsApi, ApiError, Node, Page
 from . import config
+from . import sync
 from .printer import STYLE, printc, CommandError
-from .sync import sync, git_sync
 from .unicode import usorted
 
 ####################################################################################################
@@ -823,7 +823,15 @@ class Cli:
         """Sync on disk"""
         if path is None:
             path = Path('.', 'sync')
-        sync(self._api, path)
+        sync.sync(self._api, path)
+
+    ##############################################
+
+    def sync_asset(self, path: Path = None) -> None:
+        """Sync assets on disk"""
+        if path is None:
+            path = Path('.', 'sync_asset')
+        sync.sync_asset(self._api, path)
 
     ##############################################
 
@@ -832,7 +840,7 @@ class Cli:
         if path is None:
             GIT_SYNC = 'git_sync'
             path = Path('.', GIT_SYNC)
-        git_sync(self._api, path)
+        sync.git_sync(self._api, path)
 
     ############################################################################
     #

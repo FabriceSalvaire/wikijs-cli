@@ -450,13 +450,18 @@ class PageHistory:
     def is_initial(self) -> bool:
         return self.prev is None
 
+    ##############################################
+
     @property
     def page_version(self) -> PageVersion:
         if self.versionId is None:
+            # Fixme: could return self.page
             return None
         if '_page_version' not in self.__dict__:
             self._page_version = self.api.page_version(self)
         return self._page_version
+
+    ##############################################
 
     @property
     def date(self) -> datetime:
@@ -466,23 +471,11 @@ class PageHistory:
     def date_str(self) -> str:
         return date2str(self.date)
 
+    ##############################################
+
     @property
     def changed(self) -> bool:
         return self.valueAfter != self.valueBefore
-
-    @property
-    def path(self) -> str:
-        if self.is_current:
-            return self.page.path
-        else:
-            return self.page_version.path
-
-    @property
-    def content(self) -> str:
-        if self.is_current:
-            return self.page.content
-        else:
-            return self.page_version.content
 
     @property
     def old_path(self) -> str:
@@ -491,6 +484,8 @@ class PageHistory:
     @property
     def new_path(self) -> str:
         return self.valueAfter
+
+    ##############################################
 
     @property
     def is_edited(self) -> bool:
@@ -514,6 +509,26 @@ class PageHistory:
                 new_path = self.path
                 return (old_path, new_path)
         return False
+
+    ##############################################
+
+    @property
+    def wrapper(self) -> Page | PageVersion:
+        if self.is_current:
+            return self.page
+        else:
+            return self.page_version
+
+    @property
+    def path(self) -> str:
+        return self.wrapper.path
+
+    @property
+    def content(self) -> str:
+        return self.wrapper.content
+
+    def sync(self, *args, **kwargs) -> Path:
+        return self.wrapper.sync(*args, **kwargs)
 
 ####################################################################################################
 
