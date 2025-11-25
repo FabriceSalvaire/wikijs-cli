@@ -291,9 +291,10 @@ class Page(BasePage):
 
     authorId: int = None
     authorName: str = None
+    # authorEmail: str
+
     creatorId: int = None
     creatorName: str = None
-    # authorEmail: str
     # creatorEmail: str
 
     # see property
@@ -370,31 +371,42 @@ class Page(BasePage):
 
 @dataclass
 class PageVersion(BasePage):
+    """Store a previous page version"""
     api: 'WikiJsApi'
     page: Page
 
     # Page
-    pageId: int
+    pageId: int   # Fixme: Page.id
     path: str
     locale: str
+
     title: str
     description: str
     contentType: str
-    isPublished: bool
-    isPrivate: bool
-    createdAt: str
     tags: list[str]
-    content: str
+
+    createdAt: str
+    # updatedAt ->
+    versionDate: str   # == PageHistory.versionDate
+
+    isPublished: bool
     publishEndDate: str
     publishStartDate: str
+
+    isPrivate: bool
+    # privateNS: str
+
     editor: str
 
-    # Version
-    versionId: int
-    versionDate: str
-    action: str
+    #  == PageHistory.
     authorId: str
     authorName: str
+
+    content: str
+
+    # Version
+    versionId: int   # == PageHistory.versionId
+    action: str      # != PageHistory.actionType
 
     ##############################################
 
@@ -421,20 +433,25 @@ class PageVersion(BasePage):
 
 @dataclass
 class PageHistory:
+    """Summarise a page version"""
     api: 'WikiJsApi'
     page: Page
 
+    #  == PageVersion.
     versionDate: str
     authorId: int
     authorName: str
-    actionType: str
 
+    actionType: str   # != PageVersion.action
+
+    # == PageVersion.
     versionId: int = None   # to fake the current version
 
     # used for actionType = 'move'
     valueBefore: str = None  # aka old path
     valueAfter: str = None   # aka move path
 
+    # history links
     prev: 'PageHistory' = None
     next: 'PageHistory' = None
 

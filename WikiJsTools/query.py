@@ -6,10 +6,35 @@
 #
 ####################################################################################################
 
+####################################################################################################
+
+def dump_query(query: dict) -> str:
+    variables = query.get('variables', '')
+    query_str = query['query'].replace('\n', '')
+    query_str = re.sub(' +', ' ', query_str)
+    query_str = re.sub('([a-z])}', r'\1 }', query_str)
+    return f"{query_str} {variables}"
+
+####################################################################################################
+
+def clean_query(query: str) -> str:
+    cleaned = ''
+    for line in query.splitlines():
+        line = line.strip()
+        if line.startswith('#'):
+            continue
+        if cleaned:
+            cleaned += ' '
+        cleaned += line
+    return cleaned
+
+####################################################################################################
+
 INFO = '''
 {
 system {
   info {
+    # SystemInfo
     currentVersion
     latestVersion
     groupsTotal
@@ -23,21 +48,34 @@ PAGE = '''
 query ($path: String!, $locale: String!) {
   pages {
     singleByPath(path: $path, locale: $locale) {
+      # Page
       id
       path
-      locale
+      hash
       title
       description
-      contentType
-      isPublished
       isPrivate
+      isPublished
       privateNS
+      publishStartDate
+      publishEndDate
+      # content
+      render
+      toc
+      contentType
       createdAt
       updatedAt
+      editor
+      locale
+      scriptCss
+      scriptJs
       authorId
       authorName
+      authorEmail
       creatorId
       creatorName
+      creatorEmail
+
       tags {
         tag
       }
@@ -55,6 +93,7 @@ query ($limit: Int!) {{
       orderBy: {order_by},
       orderByDirection: {order_by_direction}
     ) {{
+      # PageListItem
       id
       path
       title
@@ -79,6 +118,7 @@ query ($tags: [String!], $limit: Int!) {{
       orderBy: {order_by},
       tags: $tags
     ) {{
+      # PageListItem
       id
       path
       title
@@ -94,10 +134,11 @@ query ($tags: [String!], $limit: Int!) {{
 }}}}}}
 '''
 
-TREE = '''
+ TREE = '''
 query ($path: String!, $locale: String!) {
   pages {
     tree(path: $path, mode: ALL, locale: $locale, includeAncestors: false) {
+      # PageTreeItem
       id
       path
       depth
@@ -115,7 +156,9 @@ PAGE_HISTORY = '''
 query ($id: Int!) {
   pages {
     history(id: $id) {
+      # PageHistoryResult
       trail {
+        # PageHistory
         versionId
         versionDate
         authorId
@@ -142,6 +185,7 @@ LIST_ASSET = '''
 query ($folderId: Int!, $kind: AssetKind!) {
   assets {
     list(folderId: $folderId, kind: $kind) {
+      # AssetItem
       id
       filename
       ext
@@ -158,6 +202,7 @@ PAGE_VERSION = '''
 query ($id: Int!, $version_id: Int!) {
   pages {
     version(pageId: $id, versionId: $version_id) {
+      # PageVersion
       action
       authorId
       authorName
@@ -196,18 +241,18 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
 CREATE_PAGE = '''
 mutation (
   $content: String!,
-   $description: String!,
-   $editor: String!,
-   $isPrivate: Boolean!,
-   $isPublished: Boolean!,
-   $locale: String!,
-   $path: String!,
-   $publishEndDate: Date,
-   $publishStartDate: Date,
-   $scriptCss: String,
-   $scriptJs: String,
-   $tags: [String]!,
-   $title: String!
+  $description: String!,
+  $editor: String!,
+  $isPrivate: Boolean!,
+  $isPublished: Boolean!,
+  $locale: String!,
+  $path: String!,
+  $publishEndDate: Date,
+  $publishStartDate: Date,
+  $scriptCss: String,
+  $scriptJs: String,
+  $tags: [String]!,
+  $title: String!
 ) {
   pages {
     create(
@@ -286,6 +331,7 @@ PAGE_SEARCH = '''
 query ($query: String!) {
   pages {
     search(query: $query) {
+      # PageSearchResponse
       results {
         id
         title
@@ -302,6 +348,7 @@ TAGS = '''
 {
   pages {
     tags {
+      # PageTag
       id
       tag
       title
@@ -321,6 +368,7 @@ LINKS = '''
 query ($locale: String!) {
   pages {
     links(locale: $locale) {
+      # PageLinkItem
       id
       path
       title
