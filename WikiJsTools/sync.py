@@ -33,7 +33,7 @@ def sync_asset(api: WikiJsApi, path: Path, exist_ok: bool = False) -> None:
     # DANGER : remove all the files that are not listed as assets !!!
 
     asset_path = Path(path).expanduser().resolve()
-    printc(f"Sync asset path <green>{asset_path}</green>")
+    printc(f"<blue>Sync asset path</blue> <green>{asset_path}</green>")
 
     # Protection
     if asset_path.exists() and not exist_ok:
@@ -65,7 +65,7 @@ def sync_asset(api: WikiJsApi, path: Path, exist_ok: bool = False) -> None:
         # asset.created_at.timestamp()
         mtime = asset.updated_at.timestamp()
         if not (path.exists() and path.stat().st_mtime == mtime):
-            printc(f"Write {asset.path}")
+            printc(f"Write <green>{asset.path}</green>")
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
             os.utime(path, (mtime, mtime))
@@ -84,7 +84,7 @@ def sync(api: WikiJsApi, path: Path) -> None:
     sync_path = Path(path).expanduser().resolve()
     if sync_path.exists():
         raise CommandError(f"<red>Sync path <green>{sync_path}</green> exists</red>")
-    printc(f"Sync path <green>{sync_path}</green>")
+    printc(f"<blue>Sync path</blue> <green>{sync_path}</green>")
     # Protection
     sync_path.mkdir(exist_ok=False)
 
@@ -93,7 +93,7 @@ def sync(api: WikiJsApi, path: Path) -> None:
         file_path = page.sync(sync_path)
         if file_path is not None:
             _ = file_path.relative_to(sync_path)
-            printc(f"Wrote {_}")
+            printc(f"Wrote <green>{_}</green>")
         # else is up to date
 
     asset_path = sync_path.joinpath('_assets')
@@ -113,7 +113,7 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
     #     return
 
     repo_path = Path(path).expanduser().resolve()
-    printc(f"Git repository path <green>{repo_path}</green>")
+    printc(f"<blue>Git repository path</blue> <green>{repo_path}</green>")
 
     created = False
     if repo_path.exists():
@@ -122,7 +122,7 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
             raise CommandError(f"<red> Directory <green>{repo_path}</green> is not a git repository</red>")
         if not repo_path.joinpath(HISTORY_JSON).exists():
             raise CommandError(f"<red> Directory <green>{repo_path}</green> doesn't have a JSON history</red>")
-        printc("Git already initialised")
+        printc("<blue>Git already initialised</blue>")
     else:
         repo_path.mkdir()
         created = True
@@ -137,7 +137,7 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
             command,
             *args,
         )
-        print(' '.join(cmd))
+        printc(' '.join(cmd))
         subprocess.run(
             cmd,
             check=True,
@@ -162,7 +162,7 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
             # How versionID are generated ???
             # last_version_id = last_version['versionId']
             last_version_date = datetime.fromisoformat(last_version['versionDate'])
-        printc(f"Last version date {last_version_date}")
+        printc(f"Last version date <blue>{last_version_date}</blue>")
 
     # Fixme: progress callback
     #  how to get number of versions ?
@@ -170,9 +170,9 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
         printc(f"{p} % done")
 
     # Fixme: skip ?
-    printc("Get page histories...")
+    printc("<blue>Get page histories...</blue>")
     history = api.history(progress_callback)
-    printc("Done")
+    printc("<blue>...Done</blue>")
 
     # Commit page history
     for ph in history:
@@ -202,11 +202,15 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
                 # Fixme: is move and update possible ???
                 message = f'{ph.date_str} <blue>move</blue> @{page.locale} {ph.old_path} -> {ph.new_path}'
                 commit(ph.date, message)
-        elif ph.is_initial or ph.is_edited:
+        else:
             if ph.is_initial:
                 action = 'create'
-            else:
+            elif ph.is_edited:
                 action = 'edit'
+            elif ph.is_metadata_edited:
+                action = 'metadata edit'
+            else:
+                action = 'ghost'
             printc(f'{ph.date_str} <blue>{action}</blue> @{page.locale} <green>{page.path}</green>')
             file_path = ph.sync(repo_path, check_exists=False)
             git('add', file_path)
@@ -218,6 +222,20 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
     # Save Assets
     #  Wiki.js doesn't implement an history for assets
     sync_asset(api, asset_path, exist_ok=True)
+
+    printc("<blue>Clean old path</blue>")
+    for root, direnames, filenames in repo_path.walk():
+        if root == repo_path:
+            direnames.remove('.git')
+        path = root
+        while True:
+            if list(path.iterdir()):
+                break
+            else:
+                _ = path.relative_to(repo_path)
+                printc(f"<green>{_}</green> <orange>is empty</orange>")
+                path.rmdir()
+                path = path.parent
 
     # Now write history.json
     with open(history_json_path, 'w') as fh:
@@ -231,7 +249,7 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
             d = {
                 key: value
                 for key, value in ph.__dict__.items()
-                if key not in ('api', 'page', '_page_version') and value is not None
+                if key not in ('api', 'page', '_page_version', 'prev', 'next') and value is not None
             }
             d['locale'] = pv.locale
             d['path'] = pv.path

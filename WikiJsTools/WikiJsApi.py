@@ -94,6 +94,33 @@ class BasePage:
 
     ##############################################
 
+    METADATA_ATTRIBUTES = (
+        'title',
+        'description',
+        'tags',
+        # 'locale',
+        # 'isPublished',
+        # 'isPrivate',
+        # 'privateNS',
+        # 'publishStartDate',
+        # 'publishEndDate',
+        # 'scriptCss',
+        # 'scriptJs',
+    )
+
+    @property
+    def metadata(self) -> dict:
+        return {_: getattr(self, _) for _ in self.METADATA_ATTRIBUTES}
+
+    # Fixme: is_same_metadata
+    def same_metadata(self, obj: 'PageBase') -> bool:
+        for _ in self.METADATA_ATTRIBUTES:
+            if getattr(self, _) != getattr(obj, _):
+                return False
+        return True
+
+    ##############################################
+
     @staticmethod
     def extension_for(content_type: str = 'markdown'):
         match content_type:
@@ -215,6 +242,8 @@ class BasePage:
         ):
             try:
                 _ = getattr(self, field)
+                if field == 'pageId':
+                    field = 'id'
                 data += f'{field}: {_}' + os.linesep
             except AttributeError:
                 # for example updatedAt
@@ -506,14 +535,24 @@ class PageHistory:
 
     ##############################################
 
-    @property
-    def is_edited(self) -> bool:
-        if self.is_current:
-            return self.page.content != self.prev.page_version.content
-        elif self.prev is not None:
-            return self.page_version.content != self.prev.page_version.content
+    def _compare(self, func):
+        if self.prev is not None:
+            prev = self.prev.page_version
+            if self.is_current:
+                _ = self.page
+            else:
+                _ = self.page_version
+            return func(_, prev)
         # else initial
         return False
+
+    @property
+    def is_metadata_edited(self) -> bool:
+        return self._compare(lambda _, prev: not _.same_metadata(prev))
+
+    @property
+    def is_edited(self) -> bool:
+        return self._compare(lambda _, prev: _.content != prev.content)
 
     @property
     def is_moved(self) -> bool | tuple[str, str]:
@@ -689,7 +728,7 @@ class WikiJsApi:
             location = d['locations'][0]['column']
             query = query['query']
             query_location = query[max(0, location-1):min(location+20, len(query))]
-            message = f'{stacktrace}{LINESEP}{LINESEP}Path: {path}{LINESEP}@ {query_location}...'
+            message = f'{stacktrace}{LINESEP}{LINESEP}Path: {path}{LINESEP}@ {query_location}...{LINESEP}{LINESEP}{message}'
             raise ApiError(message)
         else:
             return data

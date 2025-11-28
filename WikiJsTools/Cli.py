@@ -650,7 +650,14 @@ class Cli:
             if action:
                 action = f'<blue>{action}</blue>'
             else:
-                action = '<orange>ghost</orange>'
+                prev_ph = ph.prev
+                if prev_ph and not page.same_metadata(prev_ph.page_version):
+                    # print(page.metadata)
+                    # print(prev_ph.page_version.metadata)
+                    action = f'<blue>metadata</blue>'
+                else:
+                    # Fixme: ok ???
+                    action = '<orange>ghost</orange>'
             self.print(f"{number_of_versions-i:4} {ph.date_str} {action}")
             if moved:
                 old_path, new_path = moved
