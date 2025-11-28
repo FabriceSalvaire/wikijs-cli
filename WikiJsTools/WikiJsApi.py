@@ -18,7 +18,6 @@ from typing import Iterator
 from pathlib import Path, PurePosixPath
 from pprint import pprint
 import os
-import re
 
 import requests
 
@@ -26,7 +25,9 @@ from . import config
 from . import query as Q
 from .date import date2str
 from .node import Node
-from .printer import printc
+from .printer import printc, html_escape
+
+LINESEP = os.linesep
 
 ####################################################################################################
 
@@ -283,29 +284,30 @@ class Page(BasePage):
     updatedAt: str
 
     isPublished: bool
-    # publishStartDate: str
-    # publishEndDate: str
 
     isPrivate: bool
     privateNS: str
 
+    publishStartDate: str = None
+    publishEndDate: str = None
+
     authorId: int = None
     authorName: str = None
-    # authorEmail: str
+    authorEmail: str = None
 
     creatorId: int = None
     creatorName: str = None
-    # creatorEmail: str
+    creatorEmail: str = None
+
+    hash: str = None
+    render: str = None
+    editor: str = None
+    scriptCss: str = None
+    scriptJs: str = None
+    toc: str = None
 
     # see property
     # content: str = None
-
-    # hash: str
-    # render: str
-    # toc: str
-    # editor: str
-    # scriptCss: str
-    # scriptJs: str
 
     ##############################################
 
@@ -670,19 +672,25 @@ class WikiJsApi:
     ##############################################
 
     def query_wikijs(self, query: dict) -> dict:
+        query['query'] = Q.clean_query(query['query'])
         if config.DEBUG:
-            variables = query.get('variables', '')
-            query_str = query['query'].replace('\n', '')
-            query_str = re.sub(' +', ' ', query_str)
-            query_str = re.sub('([a-z])}', r'\1 }', query_str)
-            printc(f"<blue>API Query:</blue> {query_str} {variables}")
+            _ = Q.dump_query(query)
+            printc(f"<blue>API Query:</blue> {_}")
         response = requests.post(f'{self._api_url}/graphql', json=query, headers=self._headers)
         if response.status_code != requests.codes.ok:
             raise NameError(f"Error {response}")
         data = response.json()
         if 'errors' in data:
-            # pprint(data)
-            raise ApiError(data['errors'][0]['message'])
+            d = data['errors'][0]
+            path = '/'.join(d['path'])
+            message = d['message']
+            stacktrace = LINESEP.join(d['extensions']['exception']['stacktrace'])
+            stacktrace = html_escape(stacktrace)
+            location = d['locations'][0]['column']
+            query = query['query']
+            query_location = query[max(0, location-1):min(location+20, len(query))]
+            message = f'{stacktrace}{LINESEP}{LINESEP}Path: {path}{LINESEP}@ {query_location}...'
+            raise ApiError(message)
         else:
             return data
 

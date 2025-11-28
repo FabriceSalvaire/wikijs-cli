@@ -6,14 +6,43 @@
 #
 ####################################################################################################
 
+# Fixme: we could extract common parts
+
 ####################################################################################################
 
-def dump_query(query: dict) -> str:
-    variables = query.get('variables', '')
-    query_str = query['query'].replace('\n', '')
+import re
+import os
+
+LINESEP = os.linesep
+
+####################################################################################################
+
+def dump_query(query: dict, colourize: bool = True) -> str:
+    variables = query.get('variables', {})
+    # remove \n, multi-spaces, ensure space before }
+    query_str = query['query']
+    query_str = query_str.replace('\n', '')
     query_str = re.sub(' +', ' ', query_str)
     query_str = re.sub('([a-z])}', r'\1 }', query_str)
-    return f"{query_str} {variables}"
+
+    if colourize:
+        colour = 'blue'
+        for c in '(){}:,$!':
+            query_str = query_str.replace(c, f'<{colour}>{c}</{colour}>')
+
+    variables = LINESEP.join([f'    {key}: {value}' for key, value in variables.items()])
+    if variables:
+        if colourize:
+            colour = 'blue'
+            for c in "{}:,'":
+                variables = variables.replace(c, f'<{colour}>{c}</{colour}>')
+            with_ = f"<{colour}>with</{colour}>"
+        else:
+            with_ = f"with"
+
+        return f'"{query_str}"{LINESEP}  {with_}{LINESEP}{variables}'
+    else:
+        return query_str
 
 ####################################################################################################
 
@@ -26,6 +55,23 @@ def clean_query(query: str) -> str:
         if cleaned:
             cleaned += ' '
         cleaned += line
+
+    # Check for unbalanced () {}
+    in_parenthesis = 0
+    in_brace = 0
+    for c in cleaned:
+        match c:
+            case '(':
+                in_parenthesis += 1
+            case ')':
+                in_parenthesis -= 1
+            case '{':
+                in_brace += 1
+            case '}':
+                in_brace -= 1
+    if in_parenthesis != 0 or in_brace != 0:
+        raise NameError(f'Query have unbalanced parenthesis {in_parenthesis} brace {in_brace}: {query}')
+
     return cleaned
 
 ####################################################################################################
@@ -35,6 +81,7 @@ INFO = '''
 system {
   info {
     # SystemInfo
+    #   partial
     currentVersion
     latestVersion
     groupsTotal
@@ -59,9 +106,13 @@ query ($path: String!, $locale: String!) {
       privateNS
       publishStartDate
       publishEndDate
+      tags {
+        # PageTag
+        tag
+      }
       # content
       render
-      toc
+      # toc # Error: String cannot represent value
       contentType
       createdAt
       updatedAt
@@ -75,10 +126,6 @@ query ($path: String!, $locale: String!) {
       creatorId
       creatorName
       creatorEmail
-
-      tags {
-        tag
-      }
 }}}
 '''
 
@@ -96,8 +143,8 @@ query ($limit: Int!) {{
       # PageListItem
       id
       path
-      title
       locale
+      title
       description
       contentType
       isPublished
@@ -121,8 +168,8 @@ query ($tags: [String!], $limit: Int!) {{
       # PageListItem
       id
       path
-      title
       locale
+      title
       description
       contentType
       isPublished
@@ -134,7 +181,7 @@ query ($tags: [String!], $limit: Int!) {{
 }}}}}}
 '''
 
- TREE = '''
+TREE = '''
 query ($path: String!, $locale: String!) {
   pages {
     tree(path: $path, mode: ALL, locale: $locale, includeAncestors: false) {
@@ -175,6 +222,7 @@ LIST_ASSET_SUBFOLDER = '''
 query ($parentFolderId: Int!) {
   assets {
     folders(parentFolderId: $parentFolderId) {
+      # AssetFolder
       id
       name
       slug
@@ -195,6 +243,8 @@ query ($folderId: Int!, $kind: AssetKind!) {
       metadata
       createdAt
       updatedAt
+      # folder: AssetFolder
+      # author
 }}}
 '''
 
@@ -230,6 +280,7 @@ mutation ($id: Int!, $destinationPath: String!, $destinationLocale: String!) {
   pages {
     move(id: $id, destinationPath: $destinationPath, destinationLocale: $destinationLocale) {
       responseResult {
+        # ResponseStatus
         succeeded
         errorCode
         slug
@@ -256,6 +307,7 @@ mutation (
 ) {
   pages {
     create(
+      # PageMutation
       content: $content,
       description: $description,
       editor: $editor,
@@ -300,6 +352,7 @@ mutation ($id: Int!,
    $title: String) {
   pages {
     update(
+      # PageMutation
       id: $id,
       content: $content,
       description: $description,
@@ -333,6 +386,7 @@ query ($query: String!) {
     search(query: $query) {
       # PageSearchResponse
       results {
+        # PageSearchResult
         id
         title
         description
