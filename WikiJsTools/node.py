@@ -130,4 +130,7 @@ class Node:
     ##############################################
 
     def join(self, path: str) -> 'str':
-        return f'{self.path}/{path}'
+        if self.is_root:
+            return f'/{path}'
+        else:
+            return f'{self.path}/{path}'

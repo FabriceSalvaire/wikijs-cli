@@ -175,13 +175,13 @@ class CustomCompleter(Completer):
 
         separator = ' '
 
-        def handle_cd(root_path, current_path, path, folder: bool):
-            if right_word.startswith('/'):
-                current_path = root_path
-            cwd = current_path.find(path)
-            if '/' in path:
+        def handle_cd(root_path, current_path, right_word, folder: bool):
+            if '/' in right_word:
                 nonlocal separator
                 separator = '/'
+            if right_word.startswith('/'):
+                current_path = root_path
+            cwd = current_path.find(right_word)
             if folder:
                 return cwd.folder_names
             else:
