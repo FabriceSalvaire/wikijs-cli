@@ -94,15 +94,14 @@ class CustomCompleter(Completer):
 
     ##############################################
 
-    def _get_word_before_cursor1(self, document, separator) -> str:
+    def _get_word_before_cursor1(self, document, separator: str) -> str:
         line = document.current_line
-        # document.cursor_position
         index = line.rfind(separator)
         # "dump " -> ""
         # "dump /foo/b" -> "b"
         return line[index+1:]
 
-    def _get_word_before_cursor2(self, document, separator) -> str:
+    def _get_word_before_cursor2(self, document, separator: str) -> str:
         return document.text_before_cursor
 
     # cf. prompt_toolkit/completion/word_completer.py
@@ -114,41 +113,16 @@ class CustomCompleter(Completer):
             separator: str,
             get_word_before_cursor,
     ) -> Iterable[Completion]:
-        # Get list of words.
-        # if callable(words):
-        #     words = words()
-
-        # Get word/text before cursor.
-        # if self.sentence:
-        #     word_before_cursor = document.text_before_cursor
-        # else:
-        #     word_before_cursor = document.get_word_before_cursor(
-        #         WORD=self.WORD, pattern=self.pattern
-        #     )
         word_before_cursor = get_word_before_cursor(document, separator)
 
-        # if self.ignore_case:
-        #     word_before_cursor = word_before_cursor.lower()
-
         def word_matches(word: str) -> bool:
-            """True when the word before the cursor matches."""
-            # if self.ignore_case:
-            #     word = word.lower()
-
-            # if self.match_middle:
-            #     return word_before_cursor in word
-            # else:
             return word.startswith(word_before_cursor)
 
         for _ in words:
             if word_matches(_):
-                # display = self.display_dict.get(_, _)
-                # display_meta = self.meta_dict.get(_, "")
                 yield Completion(
                     text=_,
                     start_position=-len(word_before_cursor),
-                    # display=display,
-                    # display_meta=display_meta,
                 )
 
     ##############################################
@@ -158,6 +132,7 @@ class CustomCompleter(Completer):
             document: Document,
             complete_event: CompleteEvent,
     ) -> Iterable[Completion]:
+        # Get command info
         line = document.current_line.lstrip()
         # remove multiple spaces
         line = re.sub(' +', ' ', line)
