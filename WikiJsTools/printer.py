@@ -6,11 +6,12 @@
 #
 ####################################################################################################
 
-__all__ = ['printc', 'default_print', 'pt_print', 'STYLE', 'remove_style', 'CommandError']
+__all__ = ['html_escape', 'printc', 'default_print', 'pt_print', 'STYLE', 'remove_style', 'CommandError']
 
 ####################################################################################################
 
 from enum import Enum
+import html
 
 from prompt_toolkit import HTML
 from prompt_toolkit import print_formatted_text
@@ -115,6 +116,10 @@ def remove_style(message: str) -> None:
             else:
                 new_message += c
     return new_message
+
+####################################################################################################
+
+html_escape = html.escape
 
 ####################################################################################################
 
