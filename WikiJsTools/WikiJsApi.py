@@ -803,11 +803,17 @@ class WikiJsApi:
 
     ##############################################
 
-    def page(self, path: str, locale: str = 'fr') -> Page:
+    def _to_path(self, path: str) -> str:
         path = str(path)
         # remove / from cd
         if path.startswith('/'):
             path = path[1:]
+        return path
+
+    ##############################################
+
+    def page(self, path: str, locale: str = 'fr') -> Page:
+        path = self._to_path(path)
         query = {
             'variables': {
                 'path': path,
@@ -993,10 +999,11 @@ class WikiJsApi:
 
     ##############################################
 
-    def tree(self, path: str = 'home') -> Iterator[Page]:
+    def tree(self, path: str) -> Iterator[Page]:
         """List the pages and folders in the parent of the page at `path`.
         When `includeAncestors` is True, the parent directories are also listed.
         """
+        path = self._to_path(path)
         query = {
             'variables': {
                 'path': path,
