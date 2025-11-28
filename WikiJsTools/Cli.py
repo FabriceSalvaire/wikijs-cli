@@ -520,7 +520,7 @@ class Cli:
     def last(self) -> None:
         """List the last updated pages"""
         for page in self._api.list_pages(order_by='UPDATED', reverse=True, limit=10):
-            self.print(f"<green>{page.path:60}</green> <blue>{page.title:40}</blue>{LINESEP}  {page.updated_at}   @{page.locale}   {page.id:3}")
+            self.print(f"<green>{page.path_str:60}</green> <blue>{page.title:40}</blue>{LINESEP}  {page.updated_at}   @{page.locale}   {page.id:3}")
 
     ##############################################
 
