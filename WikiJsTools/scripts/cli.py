@@ -12,16 +12,27 @@ __all__ = ['main']
 
 ####################################################################################################
 
-from pathlib import Path
+import argparse
 
 from WikiJsTools.Cli import Cli
 from WikiJsTools.WikiJsApi import WikiJsApi
-from WikiJsTools.config import load_config
+from WikiJsTools import config as Config
 
 ####################################################################################################
 
 def main():
-    config = load_config()
+    parser = argparse.ArgumentParser(
+        prog='wikijs-cli',
+        description='A CLI for Wiki.js',
+        epilog='',
+    )
+    parser.add_argument('--debug', action='store_true')
+    args = parser.parse_args()
+
+    if args.debug:
+        Config.DEBUG = True
+
+    config = Config.load_config()
     api = WikiJsApi(api_url=config.API_URL, api_key=config.API_KEY)
     cli = Cli(api)
     cli.cli(query='')
