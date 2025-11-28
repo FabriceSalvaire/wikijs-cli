@@ -94,6 +94,17 @@ class CustomCompleter(Completer):
 
     ##############################################
 
+    def _get_word_before_cursor1(self, document, separator) -> str:
+        line = document.current_line
+        # document.cursor_position
+        index = line.rfind(separator)
+        # "dump " -> ""
+        # "dump /foo/b" -> "b"
+        return line[index+1:]
+
+    def _get_word_before_cursor2(self, document, separator) -> str:
+        return document.text_before_cursor
+
     # cf. prompt_toolkit/completion/word_completer.py
     def _get_completions(
             self,
@@ -101,6 +112,7 @@ class CustomCompleter(Completer):
             complete_event: CompleteEvent,
             words: list[str],
             separator: str,
+            get_word_before_cursor,
     ) -> Iterable[Completion]:
         # Get list of words.
         # if callable(words):
@@ -110,25 +122,23 @@ class CustomCompleter(Completer):
         # if self.sentence:
         #     word_before_cursor = document.text_before_cursor
         # else:
-        # word_before_cursor = document.get_word_before_cursor(
-        #     WORD=self.WORD, pattern=self.pattern
-        # )
-        line = document.current_line
-        index = line.rfind(separator)
-        word_before_cursor = line[index+1:]
+        #     word_before_cursor = document.get_word_before_cursor(
+        #         WORD=self.WORD, pattern=self.pattern
+        #     )
+        word_before_cursor = get_word_before_cursor(document, separator)
 
-        if self.ignore_case:
-            word_before_cursor = word_before_cursor.lower()
+        # if self.ignore_case:
+        #     word_before_cursor = word_before_cursor.lower()
 
         def word_matches(word: str) -> bool:
             """True when the word before the cursor matches."""
-            if self.ignore_case:
-                word = word.lower()
+            # if self.ignore_case:
+            #     word = word.lower()
 
-            if self.match_middle:
-                return word_before_cursor in word
-            else:
-                return word.startswith(word_before_cursor)
+            # if self.match_middle:
+            #     return word_before_cursor in word
+            # else:
+            return word.startswith(word_before_cursor)
 
         for _ in words:
             if word_matches(_):
@@ -174,6 +184,7 @@ class CustomCompleter(Completer):
         # print(f'Debug: "{command}" | "{right_word}" | {number_of_parameters} | {parameter_type}')
 
         separator = ' '
+        get_word_before_cursor = self._get_word_before_cursor1
 
         def handle_cd(root_path, current_path, right_word, folder: bool):
             if '/' in right_word:
@@ -189,8 +200,14 @@ class CustomCompleter(Completer):
                 return cwd.leaf_names + cwd.folder_names
 
         if command is None:
+            # case "du" -> "dump"
             words = self._commands
+        elif document.current_char == ' ' and document.cursor_position < (len(document.current_line) - 1):
+            # case "du /foo" -> "dump /foo"
+            words = self._commands
+            get_word_before_cursor = self._get_word_before_cursor2
         else:
+            # case "dump " -> "dump /foo"
             words = ()
             match parameter_type:
                 case 'bool':
@@ -213,7 +230,7 @@ class CustomCompleter(Completer):
                     # Fixme: 'list[Tag]' type is list
                     # Fixme: tag can have space !
                     words = [_.tag for _ in self._cli._api.tags()]
-        yield from self._get_completions(document, complete_event, words, separator)
+        yield from self._get_completions(document, complete_event, words, separator, get_word_before_cursor)
 
 ####################################################################################################
 
