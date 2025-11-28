@@ -551,7 +551,11 @@ class Cli:
         #     self.print(f"  {_.name}")
         for _ in self._current_path.childs:
             if _.is_folder:
-                self.print(f"  <green>{_.name} /</green>")
+                if _.page is not None:
+                    has_page = f' : <orange>{_.page.title}</orange>'
+                else:
+                    has_page = ''
+                self.print(f"  <green>{_.name} /</green>{has_page}")
             else:
                 self.print(f"  <blue>{_.name}</blue> : <orange>{_.page.title}</orange>")
 

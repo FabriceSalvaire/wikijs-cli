@@ -1013,22 +1013,27 @@ class WikiJsApi:
     ##############################################
 
     def build_page_tree(self, progress_bar_cls) -> Node:
+        # Runnning time is proportionnal to the number of pages
         root = Node()
 
         def process_page(page: Page) -> None:
             # print('-'*10)
-            # print(page.path)
+            # print(f"@{page.locale} {page.path}")
             path = page.split_path
-            prev = root
+            parent = root
+            # / dir1 / dir2 / ... / page
             for _ in path:
                 try:
-                    node = prev[_]
+                    node = parent[_]
                 except KeyError:
+                    # add directory
                     node = Node(_)
-                    prev.add_child(node)
-                # print(f'{prev} // {node}')
-                prev = node
-            prev.page = page
+                    node.page = None
+                    parent.add_child(node)
+                # print(f'{parent} // {node}')
+                parent = node
+            # parent is leaf
+            parent.page = page
 
         pages = self.list_pages()
         if progress_bar_cls is not None:
