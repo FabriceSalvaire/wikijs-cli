@@ -427,6 +427,7 @@ class Cli:
 
     def reset(self) -> None:
         """Reset page and folder tree"""
+        # Fixme: can be slow
         self._page_tree = self._api.build_page_tree(ProgressBar)
         self._asset_tree = self._api.build_asset_tree()
         self._current_path = self._page_tree
