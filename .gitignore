@@ -28,3 +28,5 @@ setenv.sh
 setup.cfg
 setup.py
 setup_data.py
+
+uv.lock
