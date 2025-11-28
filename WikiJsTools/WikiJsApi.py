@@ -441,6 +441,12 @@ class PageVersion(BasePage):
 
     ##############################################
 
+    @property
+    def id(self) -> int:
+        return self.pageId
+
+    ##############################################
+
     # @property
     # def prev(self) -> 'PageVersion':
     #     # print(f"prev for {self.versionId}")
@@ -468,7 +474,7 @@ class PageHistory:
     api: 'WikiJsApi'
     page: Page
 
-    #  == PageVersion.
+    # == PageVersion.
     versionDate: str
     authorId: int
     authorName: str
@@ -517,7 +523,12 @@ class PageHistory:
 
     @property
     def date_str(self) -> str:
+        """Return local date"""
         return date2str(self.date)
+
+    @property
+    def date_utc_str(self) -> str:
+        return self.versionDate
 
     ##############################################
 
@@ -535,14 +546,19 @@ class PageHistory:
 
     ##############################################
 
+    @property
+    def wrapper(self) -> Page | PageVersion:
+        if self.is_current:
+            return self.page
+        else:
+            return self.page_version
+
+    ##############################################
+
     def _compare(self, func):
         if self.prev is not None:
             prev = self.prev.page_version
-            if self.is_current:
-                _ = self.page
-            else:
-                _ = self.page_version
-            return func(_, prev)
+            return func(self.wrapper, prev)
         # else initial
         return False
 
@@ -571,15 +587,20 @@ class PageHistory:
     ##############################################
 
     @property
-    def wrapper(self) -> Page | PageVersion:
-        if self.is_current:
-            return self.page
-        else:
-            return self.page_version
+    def locale(self) -> str:
+        return self.wrapper.locale
 
     @property
     def path(self) -> str:
         return self.wrapper.path
+
+    @property
+    def path_str(self) -> str:
+        return self.wrapper.path_str
+
+    @property
+    def page_id(self) -> str:
+        return self.wrapper.id
 
     @property
     def content(self) -> str:

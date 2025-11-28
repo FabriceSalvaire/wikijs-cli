@@ -15,11 +15,15 @@ from dateutil import tz
 
 ####################################################################################################
 
-# UTC_ZONE = tz.tzutc()
-LOCAL_ZOME = tz.tzlocal()
+UTC_ZONE = tz.tzutc()
+LOCAL_ZONE = tz.tzlocal()
 
 ####################################################################################################
 
-def date2str(date: datetime) -> str:
-    _ = date.astimezone(LOCAL_ZOME)
+def date2str(date: datetime, local: bool = True) -> str:
+    if local:
+        _ = LOCAL_ZONE
+    else:
+        _ = UTC_ZONE
+    _ = date.astimezone(_)
     return _.strftime('%Y/%m/%d %H:%M:%S')

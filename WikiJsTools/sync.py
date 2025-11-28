@@ -28,6 +28,35 @@ HISTORY_JSON = 'wikijs-history.json'
 
 ####################################################################################################
 
+def git(repo_path, command: str, *args, **kwargs) -> None:
+    args = [str(_) for _ in args]
+    cmd = (
+        GIT,
+        '--no-pager',
+        command,
+        *args,
+    )
+    _ = ' '.join(cmd)
+    printc(f"Run {_}")
+    capture_output = kwargs.get('capture_output', False)
+    process = subprocess.run(
+        cmd,
+        check=True,
+        cwd=repo_path,
+        capture_output=capture_output,
+    )
+    if capture_output and process.stdout is not None:
+        # print(process.stderr, process.stdout)
+        return process.stdout.decode('utf8')
+    return None
+
+
+def get_last_commit_date(repo_path):
+    output = git(repo_path, 'log', '-1', '--date=iso-strict', '--format="%ad"', capture_output=True)
+    return datetime.fromisoformat(output.strip().replace('"', ''))
+
+####################################################################################################
+
 def sync_asset(api: WikiJsApi, path: Path, exist_ok: bool = False) -> None:
 
     # DANGER : remove all the files that are not listed as assets !!!
@@ -130,31 +159,21 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
     history_json_path = repo_path.joinpath(HISTORY_JSON)
     asset_path = repo_path.joinpath('_assets')
 
-    def git(command: str, *args) -> None:
-        args = [str(_) for _ in args]
-        cmd = (
-            GIT,
-            command,
-            *args,
-        )
-        printc(' '.join(cmd))
-        subprocess.run(
-            cmd,
-            check=True,
-            cwd=repo_path,
-        )
+    def git_(command: str, *args) -> None:
+        git(repo_path, command, *args)
 
-    def commit(date, message: str) -> None:
-        git(
+    def commit(date: datetime, message: str) -> None:
+        git_(
             'commit',
             '-m', message,
-            f'--date={date}',
+            f'--date={date.isoformat()}',
         )
 
     json_versions = []
-    last_version_date = None
+    last_version_date = None   # Fixme: this is not the last edit
+    last_commit_date = None
     if created:
-        git('init')
+        git_('init')
     else:
         with open(history_json_path, 'r') as fh:
             json_versions = json.load(fh)
@@ -163,11 +182,13 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
             # last_version_id = last_version['versionId']
             last_version_date = datetime.fromisoformat(last_version['versionDate'])
         printc(f"Last version date <blue>{last_version_date}</blue>")
+        last_commit_date = get_last_commit_date(repo_path)
+        printc(f"Last commit date <blue>{last_commit_date}</blue>")
 
     # Fixme: progress callback
     #  how to get number of versions ?
     def progress_callback(p: int) -> None:
-        printc(f"{p} % done")
+        printc(f"<blue>{p} % done</blue>")
 
     # Fixme: skip ?
     printc("<blue>Get page histories...</blue>")
@@ -176,9 +197,10 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
 
     # Commit page history
     for ph in history:
-        if last_version_date is not None:
-            _ = datetime.fromisoformat(ph.versionDate)
-            if _ <= last_version_date:
+        if last_commit_date is not None:
+            # Git commit date is limited to s and not ms !
+            # if ph.date <= last_commit_date:
+            if ph.date <= last_version_date:
                 continue
 
         page = ph.page
@@ -194,13 +216,13 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
                 new_path = page.file_path(repo_path, new_upath)
                 new_path.parent.mkdir(parents=True, exist_ok=True)
                 # Fixme: remove old directory
-                git('mv', old_path, new_path)
+                git_('mv', old_path, new_path)
                 # update file content metadata
                 # Fixme: file_path == new_path
                 file_path = ph.sync(repo_path, check_exists=False)
-                git('add', file_path)
+                git_('add', file_path)
                 # Fixme: is move and update possible ???
-                message = f'{ph.date_str} <blue>move</blue> @{page.locale} {ph.old_path} -> {ph.new_path}'
+                message = f'{ph.date_utc_str} <blue>move</blue> @{page.locale} {ph.old_path} -> {ph.new_path}'
                 commit(ph.date, message)
         else:
             if ph.is_initial:
@@ -211,9 +233,9 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
                 action = 'metadata edit'
             else:
                 action = 'ghost'
-            printc(f'{ph.date_str} <blue>{action}</blue> @{page.locale} <green>{page.path}</green>')
+            printc(f'{ph.date_utc_str} <blue>{action}</blue> @{page.locale} <green>{page.path}</green>')
             file_path = ph.sync(repo_path, check_exists=False)
-            git('add', file_path)
+            git_('add', file_path)
             message = f'{action} @{page.locale} {page.path}'
             commit(ph.date, message)
 
@@ -221,6 +243,7 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
 
     # Save Assets
     #  Wiki.js doesn't implement an history for assets
+    #  so we rewrite...
     sync_asset(api, asset_path, exist_ok=True)
 
     printc("<blue>Clean old path</blue>")
@@ -243,17 +266,14 @@ def git_sync(api: WikiJsApi, path: Path) -> None:
         json_versions = []
         for ph in history:
             # Fixme: better ?
-            pv = ph.page_version
-            if pv is None:
-                continue
             d = {
                 key: value
                 for key, value in ph.__dict__.items()
                 if key not in ('api', 'page', '_page_version', 'prev', 'next') and value is not None
             }
-            d['locale'] = pv.locale
-            d['path'] = pv.path
-            d['pageId'] = pv.pageId
+            d['locale'] = ph.locale
+            d['path'] = ph.path_str
+            d['pageId'] = ph.page_id
             json_versions.append(d)
         # last = history[-1]
         # data = {
