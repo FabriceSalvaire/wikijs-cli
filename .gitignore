@@ -30,3 +30,8 @@ setup.py
 setup_data.py
 
 uv.lock
+
+du-prev.log
+du.log
+
+wikijs-sync
