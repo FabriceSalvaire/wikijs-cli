@@ -313,33 +313,32 @@ class BasePage:
     def import_(self, lines: str, api: 'WikiJsApi') -> 'Page':
         data = dict(id=None, createdAt=None, updatedAt=None)
         # Fixme: we must keep content as it is
-        content = None
+        offset = 0
         for line in lines.splitlines(keepends=True):
+            offset += len(line)
             sline = line.strip()
-            print(line)
-            if content is None:
-                if sline == self.RULE:
-                    content = ''
-                else:
-                    index = sline.find(":")
-                    key = sline[:index].strip()
-                    value = sline[index+1:].strip()
-                    match key:
-                        case 'id':
-                            if value:
-                                value = int(value)
-                        case 'tags':
-                            value = self.import_tags(value)
-                        case 'isPublished' | 'isPrivate':
-                            value = value == 'True'
-                    data[key] = value
+            if sline == self.RULE:
+                break
             else:
-                content += line
+                index = sline.find(":")
+                key = sline[:index].strip()
+                value = sline[index+1:].strip()
+                match key:
+                    case 'id':
+                        if value:
+                            value = int(value)
+                    case 'tags':
+                        value = self.import_tags(value)
+                    case 'isPublished' | 'isPrivate':
+                        value = value == 'True'
+                data[key] = value
+        content = lines[offset:]
+        # Ensure trailing line sep
+        # content = content.strip() + LINESEP
         #! data['content'] = content
-        # print('pprint data')
-        # pprint(data)
         print('pprint data')
         pprint(data)
+        pprint(content)
         page = Page(api, **data)
         page._content = content
         return page
