@@ -15,10 +15,11 @@ __all__ = ['Cli']
 from pathlib import Path, PurePosixPath
 from pprint import pprint
 from typing import Iterable
+
+# import logging
 import difflib
 import html
 import inspect
-# import logging
 import os
 import re
 import subprocess
@@ -537,7 +538,8 @@ class Cli:
 
     def itree(self, id: int) -> None:
         """Show page tree"""
-        items = list(self._api.itree(id))
+        # items = list(self._api.itree(id))
+        items = self._api.itree(id)
         items = usorted(items, 'path_str')
         for item in items:
             is_folder = '/' if item.isFolder else ''

@@ -14,10 +14,12 @@ __all__ = ['ApiError', 'WikiJsApi', 'Node', 'Page']
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterator
+from functools import wraps
 from pathlib import Path, PurePosixPath
 from pprint import pprint
 from typing import Any
+from typing import Iterator
+
 import os
 import types
 
@@ -809,34 +811,32 @@ class WikiJsApi:
         cache[key] = (time(), value)
 
     # Decorator
+    # Fixme: do we need is_generator
     def cache(cache_name: str):
         def decorator(func):
+            print('Cache func', func)
+            @wraps(func)
             def wrapper(self, *args, **kwargs):
+                print('wrapper', args, kwargs)
                 cache = kwargs.pop('cache', True)
                 cache_key = None
-                is_cached = False
+                value = None
                 if cache:
                     parts = [str(_) for _ in args] + [f'{key}:{value}' for key, value in kwargs.items()]
                     cache_key = '/'.join(parts)
-                    _ = self._lookup_cache(cache_name, cache_key)
-                    if _ is not None:
-                        print(f'Found in cache {cache_key}')
-                        is_cached = True
-                        is_generator, value = _
-                if not is_cached:
-                    print(f'Call {func}')
+                    value = self._lookup_cache(cache_name, cache_key)
+                    if value is not None:
+                        printc(f'Found in cache {cache_key}')
+                if value is None:
+                    print(f'Call {func}')   # Fixme: <>
                     value = func(self, *args, **kwargs)
+                    # We cannot mix return and yield in a function !
                     is_generator = isinstance(value, types.GeneratorType)
                     if is_generator:
                         value = list(value)
                     if cache:
-                        _ = (is_generator, value)
-                        self._store_cache(cache_name, cache_key, _)
-                if is_generator:
-                    for _ in value:
-                        yield _
-                else:
-                    return value
+                        self._store_cache(cache_name, cache_key, value)
+                return value
             return wrapper
         return decorator
 
@@ -923,6 +923,7 @@ class WikiJsApi:
 
     ##############################################
 
+    @cache(cache_name='page')
     def page(self, path: str, locale: str = 'fr') -> Page:
         path = self._to_path(path)
         query = {
@@ -1136,7 +1137,8 @@ class WikiJsApi:
             yield PageTreeItem(api=self, **_)
 
     @cache(cache_name='itree')
-    def itree(self, id: int) -> Iterator[Page]:
+    # def itree(self, id: int) -> Iterator[Page]:
+    def itree(self, id: int) -> list[Page]:
         """List the pages and folders in the parent of the page at `path`.
         When `includeAncestors` is True, the parent directories are also listed.
         """
@@ -1149,8 +1151,9 @@ class WikiJsApi:
             'query': Q.TREE_PARENT,
         }
         data = self.query_wikijs(query)
-        for _ in xpath(data, 'data/pages/tree'):
-            yield PageTreeItem(api=self, **_)
+        # for _ in xpath(data, 'data/pages/tree'):
+        #     yield PageTreeItem(api=self, **_)
+        return [PageTreeItem(api=self, **_) for _ in xpath(data, 'data/pages/tree')]
 
     ##############################################
 
