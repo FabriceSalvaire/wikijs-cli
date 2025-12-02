@@ -5,6 +5,7 @@ description = "..."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "fusepy>=3.0.1",
     "prompt-toolkit>=3.0.52",
     "pyicu>=2.16",
     "python-dateutil>=2.9.0.post0",
