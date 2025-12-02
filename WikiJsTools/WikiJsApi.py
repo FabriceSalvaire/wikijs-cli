@@ -286,8 +286,9 @@ class BasePage:
             except AttributeError:
                 # for example updatedAt
                 pass
-        data += self.RULE + os.linesep
-        data += self.content.rstrip()
+        data += self.RULE + LINESEP
+        # keep trailing end line / .rstrip()
+        data += self.content
         return data
 
     @property
