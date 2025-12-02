@@ -78,6 +78,12 @@ class PageTreeItem:
         # Fixme: see BasePage
         self.path = PurePosixPath(self.path)
 
+    ##############################################
+
+    @property
+    def path_str(self) -> str:
+        return str(self.path)
+
 ####################################################################################################
 
 class BasePage:

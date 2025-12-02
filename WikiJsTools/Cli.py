@@ -529,7 +529,7 @@ class Cli:
         path = self._absolut_path(path)
         items = list(self._api.tree(path))
         # items.sort(key=lambda _: _.path)
-        items = usorted(items, 'path')
+        items = usorted(items, 'path_str')
         for item in items:
             is_folder = '/' if item.isFolder else ''
             path = f"{item.path}{is_folder}"
@@ -538,7 +538,7 @@ class Cli:
     def itree(self, id: int) -> None:
         """Show page tree"""
         items = list(self._api.itree(id))
-        items = usorted(items, 'path')
+        items = usorted(items, 'path_str')
         for item in items:
             is_folder = '/' if item.isFolder else ''
             path = f"{item.path}{is_folder}"
