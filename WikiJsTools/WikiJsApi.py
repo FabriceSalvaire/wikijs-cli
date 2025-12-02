@@ -297,6 +297,10 @@ class BasePage:
             self._bytes_data = self.export().encode('utf8')
         return self._bytes_data
 
+    @property
+    def bytes_size(self) -> int:
+        return len(self.bytes_data)
+
     ##############################################
 
     def write(self, dst: Path | str) -> Path:

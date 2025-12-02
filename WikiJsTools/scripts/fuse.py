@@ -36,5 +36,7 @@ def main():
 
     config = Config.load_config()
     api = WikiJsApi(api_url=config.API_URL, api_key=config.API_KEY)
-    logging.basicConfig(level=logging.DEBUG)
+    # level = logging.DEBUG
+    level = logging.INFO
+    logging.basicConfig(level=level)
     mount(api, args.mount)
