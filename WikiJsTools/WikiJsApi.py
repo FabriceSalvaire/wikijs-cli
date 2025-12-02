@@ -420,6 +420,13 @@ class Page(BasePage):
     ##############################################
 
     @property
+    def created_at(self) -> datetime:
+        if self.createdAt:
+            return datetime.fromisoformat(self.createdAt)
+        else:
+            return None
+
+    @property
     def updated_at(self) -> datetime:
         if self.updatedAt:
             return datetime.fromisoformat(self.updatedAt)
