@@ -970,6 +970,9 @@ class WikiJsApi:
         # "variables":{"id":96,"checkoutDate":"2024-11-07T02:04:57.106Z"}
         # "query ($id: Int!, $checkoutDate: Date!) { pages {
         #   checkConflicts(id: $id, checkoutDate: $checkoutDate) }}"}]'
+        # Fixme: ok ?
+        if page.id is None:
+            raise NameError(f"Cannot update a page without id")
         query = {
             'variables': {
                 'id': page.id,
