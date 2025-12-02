@@ -17,7 +17,9 @@ from datetime import datetime
 from typing import Iterator
 from pathlib import Path, PurePosixPath
 from pprint import pprint
+from typing import Any
 import os
+import types
 
 import requests
 
@@ -26,6 +28,7 @@ from . import query as Q
 from .date import date2str
 from .node import Node
 from .printer import printc, html_escape
+from time import time
 
 LINESEP = os.linesep
 
@@ -755,15 +758,19 @@ class ApiError(NameError):
 
 class WikiJsApi:
 
+    DEFAULT_EXPIRE_TIME = 5 * 60   # s
+
     ##############################################
 
-    def __init__(self, api_url: str, api_key: str) -> None:
+    def __init__(self, api_url: str, api_key: str, expire_time: int = DEFAULT_EXPIRE_TIME) -> None:
         self._api_url = str(api_url)
         self._api_key = str(api_key)
         self._headers = {
             'Authorization': f'Bearer {api_key}',
             # 'content-type': 'application/json',
         }
+        self._expire_time = int(expire_time)
+        self._cache = {_: dict() for _ in ('itree', 'page')}
         self.info()
 
     ##############################################
@@ -782,6 +789,56 @@ class WikiJsApi:
             if c in ' .,;!?&|+=*^~#%$@{}[]<>\\\'"':
                 return False
         return True
+
+    ##############################################
+
+    def _lookup_cache(self, cache_name: str, key: str) -> Any | None:
+        cache = self._cache[cache_name]
+        now = time()
+        cached = cache.get(key, None)
+        if cached is not None:
+            delta = now - cached[0]
+            printc(f"Cached {cache_name} {key}")
+            if delta <= self._expire_time:
+                return cached[1]
+        return None
+
+    def _store_cache(self, cache_name: str, key: str, value: Any):
+        printc(f"Cache {cache_name} {key}")
+        cache = self._cache[cache_name]
+        cache[key] = (time(), value)
+
+    # Decorator
+    def cache(cache_name: str):
+        def decorator(func):
+            def wrapper(self, *args, **kwargs):
+                cache = kwargs.pop('cache', True)
+                cache_key = None
+                is_cached = False
+                if cache:
+                    parts = [str(_) for _ in args] + [f'{key}:{value}' for key, value in kwargs.items()]
+                    cache_key = '/'.join(parts)
+                    _ = self._lookup_cache(cache_name, cache_key)
+                    if _ is not None:
+                        print(f'Found in cache {cache_key}')
+                        is_cached = True
+                        is_generator, value = _
+                if not is_cached:
+                    print(f'Call {func}')
+                    value = func(self, *args, **kwargs)
+                    is_generator = isinstance(value, types.GeneratorType)
+                    if is_generator:
+                        value = list(value)
+                    if cache:
+                        _ = (is_generator, value)
+                        self._store_cache(cache_name, cache_key, _)
+                if is_generator:
+                    for _ in value:
+                        yield _
+                else:
+                    return value
+            return wrapper
+        return decorator
 
     ##############################################
 
@@ -1078,6 +1135,7 @@ class WikiJsApi:
         for _ in xpath(data, 'data/pages/tree'):
             yield PageTreeItem(api=self, **_)
 
+    @cache(cache_name='itree')
     def itree(self, id: int) -> Iterator[Page]:
         """List the pages and folders in the parent of the page at `path`.
         When `includeAncestors` is True, the parent directories are also listed.
