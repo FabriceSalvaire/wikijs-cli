@@ -806,13 +806,13 @@ class WikiJsApi:
         cached = cache.get(key, None)
         if cached is not None:
             delta = now - cached[0]
-            printc(f"Cached {cache_name} {key}")
+            # printc(f"Cached {cache_name} {key}")
             if delta <= self._expire_time:
                 return cached[1]
         return None
 
     def _store_cache(self, cache_name: str, key: str, value: Any):
-        printc(f"Cache {cache_name} {key}")
+        # printc(f"Cache {cache_name} {key}")
         cache = self._cache[cache_name]
         cache[key] = (time(), value)
 
@@ -823,7 +823,6 @@ class WikiJsApi:
             print('Cache func', func)
             @wraps(func)
             def wrapper(self, *args, **kwargs):
-                print('wrapper', args, kwargs)
                 cache = kwargs.pop('cache', True)
                 cache_key = None
                 value = None
@@ -831,8 +830,8 @@ class WikiJsApi:
                     parts = [str(_) for _ in args] + [f'{key}:{value}' for key, value in kwargs.items()]
                     cache_key = '/'.join(parts)
                     value = self._lookup_cache(cache_name, cache_key)
-                    if value is not None:
-                        printc(f'Found in cache {cache_key}')
+                    # if value is not None:
+                    #     printc(f'Found in cache {cache_key}')
                 if value is None:
                     print(f'Call {func}')   # Fixme: <>
                     value = func(self, *args, **kwargs)
