@@ -192,7 +192,7 @@ class BasePage:
             return
 
         data = ''
-        # data += cls.RULE + os.linesep
+        # data += cls.RULE + LINESEP
         for field, value in dict(
                 title='',
                 locale=locale,
@@ -207,8 +207,8 @@ class BasePage:
                 privateNS=None,
                 contentType=content_type,
         ).items():
-            data += f'{field}: {value}' + os.linesep
-        data += cls.RULE + os.linesep
+            data += f'{field}: {value}' + LINESEP
+        data += cls.RULE + LINESEP
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(data, encoding='utf8')
         return dst
@@ -256,7 +256,7 @@ class BasePage:
 
     def export(self) -> str:
         data = ''
-        # data += self.RULE + os.linesep
+        # data += self.RULE + LINESEP
         for field in (
                 'title',
                 'locale',
@@ -282,7 +282,7 @@ class BasePage:
                     case 'tags':
                         value = self.export_tags(value)
                     # True/False -> True/False
-                data += f'{field}: {value}' + os.linesep
+                data += f'{field}: {value}' + LINESEP
             except AttributeError:
                 # for example updatedAt
                 pass
@@ -405,6 +405,7 @@ class Page(BasePage):
 
     @property
     def content(self) -> None:
+        # Fixme: not hasattr(self, '_content')
         if '_content' not in self.__dict__:
             self.api.complete_page(self)
         return self._content
@@ -413,6 +414,7 @@ class Page(BasePage):
     def history(self) -> list['PageHistory']:
         # order is newer first
         # the first one corresponds to the previous version !
+        # Fixme: not hasattr(self, '_history')
         if '_history' not in self.__dict__:
             current = PageHistory(
                 api=self.api,
