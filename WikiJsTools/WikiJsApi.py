@@ -226,6 +226,23 @@ class BasePage:
 
     ##############################################
 
+    @classmethod
+    def export_tags(cls, tags: list[str]) -> str:
+        return '[' + ', '.join(["'" + _.replace("'", r"\'") + "'" for _ in tags]) + ']'
+
+    @classmethod
+    def import_tags(cls, tags: str) -> list[str]:
+        if tags[0] != '[' or tags[-1] != ']':
+            raise ValueError()
+        def on_tag(tag):
+            tag = tag.strip()
+            if tag[0] != tag[-1] != "'":
+                raise ValueError()
+            return tag[1:-1]
+        return [on_tag(_) for _ in tags[1:-1].split(',')]
+
+    ##############################################
+
     def export(self) -> str:
         data = ''
         # data += self.RULE + os.linesep
@@ -247,10 +264,14 @@ class BasePage:
                 'contentType',
         ):
             try:
-                _ = getattr(self, field)
-                if field == 'pageId':
-                    field = 'id'
-                data += f'{field}: {_}' + os.linesep
+                value = getattr(self, field)
+                match field:
+                    case 'pageId':
+                        field = 'id'
+                    case 'tags':
+                        value = self.export_tags(value)
+                    # True/False -> True/False
+                data += f'{field}: {value}' + os.linesep
             except AttributeError:
                 # for example updatedAt
                 pass
@@ -271,31 +292,45 @@ class BasePage:
     ##############################################
 
     @classmethod
+    def import_(self, lines: str, api: 'WikiJsApi') -> 'Page':
+        data = dict(id=None, createdAt=None, updatedAt=None)
+        # Fixme: we must keep content as it is
+        content = None
+        for line in lines.splitlines(keepends=True):
+            sline = line.strip()
+            print(line)
+            if content is None:
+                if sline == self.RULE:
+                    content = ''
+                else:
+                    index = sline.find(":")
+                    key = sline[:index].strip()
+                    value = sline[index+1:].strip()
+                    match key:
+                        case 'id':
+                            if value:
+                                value = int(value)
+                        case 'tags':
+                            value = self.import_tags(value)
+                        case 'isPublished' | 'isPrivate':
+                            value = value == 'True'
+                    data[key] = value
+            else:
+                content += line
+        #! data['content'] = content
+        # print('pprint data')
+        # pprint(data)
+        print('pprint data')
+        pprint(data)
+        page = Page(api, **data)
+        page._content = content
+        return page
+
+    @classmethod
     def read(self, input: Path | str, api: 'WikiJsApi') -> 'Page':
         input = Path(input)
-        data = dict(id=None, createdAt=None, updatedAt=None)
-        with open(input, 'r', encoding='utf8') as fh:
-            content = None
-            for line in fh.readlines():
-                if content is None:
-                    line = line.strip()
-                    if line == self.RULE:
-                        content = ''
-                    else:
-                        index = line.find(":")
-                        key = line[:index].strip()
-                        value = line[index+1:].strip()
-                        if key == 'id' and value:
-                            value = int(value)
-                        data[key] = value
-                else:
-                    content += line
-            data['content'] = content
-        data['tags'] = [_.strip() for _ in data['tags'][1:-1].split(',') if _.strip()]
-        for _ in ('isPublished', 'isPrivate'):
-            data[_] = True if data[_] == 'True' else False
-        pprint(data)
-        return Page(api, **data)
+        lines = input.read_text()
+        return self.import_(lines, api)
 
 ####################################################################################################
 
