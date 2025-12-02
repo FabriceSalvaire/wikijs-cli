@@ -46,7 +46,6 @@ class WikiJsFuse(LoggingMixIn, Operations):
     def __init__(self, api: WikiJsApi) -> None:
         self._api = api
         self._mount_time = time()
-        self._cache = {_: dict() for _ in ('itree', 'page')}
         self.files = {}
         self.data = defaultdict(bytes)
         self.fd = 0
@@ -61,29 +60,6 @@ class WikiJsFuse(LoggingMixIn, Operations):
 
     ##############################################
 
-    def _cached_query(self, cache_name: dict, func, arg):
-        TIME_DELTA = 60 * 5
-        cache = self._cache[cache_name]
-        now = time()
-        cached = cache.get(arg, None)
-        if cached is not None:
-            delta = now - cached[0]
-            print('Cached', cache_name, arg, delta)
-            if delta <= TIME_DELTA:
-                return cached[1]
-        item = func(arg)
-        print('Cache', cache_name, arg)
-        cache[arg] = (time(), item)
-        return item
-
-    def _itree(self, id: int):
-        return self._cached_query('itree', lambda id: list(self._api.itree(id)), id)
-
-    def _page(self, path: str):
-        page = self._cached_query('page', self._api.page, path)
-        page._data = page.export().encode('utf8')
-        return page
-
     # def _list_folder(self, path: str) -> None:
     #     items = list(self._itree(0))
     #     for item in items:
@@ -97,7 +73,7 @@ class WikiJsFuse(LoggingMixIn, Operations):
             else:
                 folder = cache[i-1][part]
                 folder_id = folder.id
-            items = {_.path.name: _ for _ in self._itree(folder_id)}
+            items = {_.path.name: _ for _ in self._api.itree(folder_id)}
             cache.append(items)
         return cache
 
@@ -163,8 +139,8 @@ class WikiJsFuse(LoggingMixIn, Operations):
                     st_nlink=2,
                 )
             else:
-                page = self._page(path)
-                data = page._data
+                page = self._api.page(path)
+                data = page.bytes_data
                 return dict(
                     st_mode=(S_IFREG | 0o644),
                     st_ctime=page.created_at.timestamp(),
@@ -221,8 +197,8 @@ class WikiJsFuse(LoggingMixIn, Operations):
 
     def read(self, path: str, size, offset, fh) -> bytes:
         print('read', path, size, offset, fh)
-        page = self._page(path)
-        data = page._data
+        page = self._api.page(path)
+        data = page.bytes_data
         return data[offset:offset + size]
 
     ##############################################

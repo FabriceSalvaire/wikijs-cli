@@ -290,6 +290,12 @@ class BasePage:
         data += self.content.rstrip()
         return data
 
+    @property
+    def bytes_data(self) -> str:
+        if not hasattr(self, '_bytes_data'):
+            self._bytes_data = self.export().encode('utf8')
+        return self._bytes_data
+
     ##############################################
 
     def write(self, dst: Path | str) -> Path:
