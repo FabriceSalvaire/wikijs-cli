@@ -957,6 +957,9 @@ class WikiJsApi:
         # pprint(query)
         data = self.query_wikijs(query)
         # pprint(data)
+        _ = xpath(data, 'data/pages/create/page')
+        page.id = int(_['id'])
+        page.updatedAt = _['updatedAt']
         _ = xpath(data, 'data/pages/create/responseResult')
         return ResponseResult(**_)
 
