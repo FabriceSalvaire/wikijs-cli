@@ -527,13 +527,22 @@ class Cli:
     def tree(self, path: PagePath) -> None:
         """Show page tree"""
         path = self._absolut_path(path)
-        pages = list(self._api.tree(path))
-        # pages.sort(key=lambda _: _.path)
-        pages = usorted(pages, 'path')
-        for page in pages:
-            is_folder = '/' if page.isFolder else ''
-            path = f"{page.path}{is_folder}"
-            self.print(f"<green>{path:60}</green> <blue>{page.title:40}</blue>")
+        items = list(self._api.tree(path))
+        # items.sort(key=lambda _: _.path)
+        items = usorted(items, 'path')
+        for item in items:
+            is_folder = '/' if item.isFolder else ''
+            path = f"{item.path}{is_folder}"
+            self.print(f"<green>{path:60}</green> <blue>{item.title:40}</blue> #{item.id}")
+
+    def itree(self, id: int) -> None:
+        """Show page tree"""
+        items = list(self._api.itree(id))
+        items = usorted(items, 'path')
+        for item in items:
+            is_folder = '/' if item.isFolder else ''
+            path = f"{item.path}{is_folder}"
+            self.print(f"<green>{path:60}</green> <blue>{item.title:40}</blue> #{item.id}")
 
     ##############################################
 

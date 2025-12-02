@@ -62,7 +62,7 @@ class PageTreeItem:
     api: 'WikiJsApi'
 
     id: int
-    path: str
+    path: PurePosixPath
     depth: int
     title: str
     isPrivate: bool
@@ -71,6 +71,12 @@ class PageTreeItem:
     parent: int
     pageId: int
     locale: str
+
+    ##############################################
+
+    def __post_init__(self):
+        # Fixme: see BasePage
+        self.path = PurePosixPath(self.path)
 
 ####################################################################################################
 
@@ -1003,6 +1009,7 @@ class WikiJsApi:
         """List the pages and folders in the parent of the page at `path`.
         When `includeAncestors` is True, the parent directories are also listed.
         """
+        # Fixme: wikijs uses parent
         path = self._to_path(path)
         query = {
             'variables': {
@@ -1011,7 +1018,23 @@ class WikiJsApi:
                 'locale': 'fr'
             },
             # parent: Int
-            'query': Q.TREE,
+            'query': Q.TREE_PATH,
+        }
+        data = self.query_wikijs(query)
+        for _ in xpath(data, 'data/pages/tree'):
+            yield PageTreeItem(api=self, **_)
+
+    def itree(self, id: int) -> Iterator[Page]:
+        """List the pages and folders in the parent of the page at `path`.
+        When `includeAncestors` is True, the parent directories are also listed.
+        """
+        # Fixme: wikijs uses parent
+        query = {
+            'variables': {
+                'parent': int(id),
+                'locale': 'fr'
+            },
+            'query': Q.TREE_PARENT,
         }
         data = self.query_wikijs(query)
         for _ in xpath(data, 'data/pages/tree'):

@@ -181,10 +181,28 @@ query ($tags: [String!], $limit: Int!) {{
 }}}}}}
 '''
 
-TREE = '''
+TREE_PATH = '''
 query ($path: String!, $locale: String!) {
   pages {
     tree(path: $path, mode: ALL, locale: $locale, includeAncestors: false) {
+      # PageTreeItem
+      id
+      path
+      depth
+      title
+      isPrivate
+      isFolder
+      privateNS
+      parent
+      pageId
+      locale
+}}}
+'''
+
+TREE_PARENT = '''
+query ($parent: Int, $locale: String!) {
+  pages {
+    tree(parent: $parent, mode: ALL, locale: $locale, includeAncestors: false) {
       # PageTreeItem
       id
       path
