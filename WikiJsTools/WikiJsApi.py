@@ -785,12 +785,12 @@ class WikiJsApi:
             _ = Q.dump_query(query)
             printc(f"<blue>API Query:</blue> {_}")
         response = requests.post(f'{self._api_url}/graphql', json=query, headers=self._headers)
-        if response.status_code != requests.codes.ok:
-            raise NameError(f"Error {response}")
+        # if response.status_code != requests.codes.ok:
+        #     raise NameError(f"Error {response}")
         data = response.json()
         if 'errors' in data:
             d = data['errors'][0]
-            path = '/'.join(d['path'])
+            path = '/'.join(d.get('path', ''))
             message = d['message']
             stacktrace = LINESEP.join(d['extensions']['exception']['stacktrace'])
             stacktrace = html_escape(stacktrace)
