@@ -335,7 +335,7 @@ mutation (
 }}}
 '''
 
-UPDATED_PAGE = '''
+UPDATE_PAGE = '''
 mutation ($id: Int!,
    $content: String,
    $description: String,
